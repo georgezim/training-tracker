@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full bleed background for maskable -->
+  <rect width="512" height="512" fill="#1B2A4A"/>
+  <!-- Running figure (slightly smaller to fit safe zone) -->
+  <circle cx="290" cy="120" r="34" fill="#3B82F6"/>
+  <path d="M290 154 L258 258 L300 253" stroke="#3B82F6" stroke-width="28" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M276 188 L210 225" stroke="#3B82F6" stroke-width="24" fill="none" stroke-linecap="round"/>
+  <path d="M290 182 L350 155" stroke="#3B82F6" stroke-width="24" fill="none" stroke-linecap="round"/>
+  <path d="M258 258 L205 330 L172 330" stroke="#3B82F6" stroke-width="26" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M300 253 L328 360 L366 370" stroke="#60A5FA" stroke-width="26" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="440" font-size="46" font-weight="bold" text-anchor="middle" fill="#3B82F6" font-family="Arial, sans-serif">42.2K</text>
+</svg>

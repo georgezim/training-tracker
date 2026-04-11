@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#1B2A4A"/>
+  <!-- Running figure -->
+  <!-- Head -->
+  <circle cx="300" cy="110" r="38" fill="#3B82F6"/>
+  <!-- Torso -->
+  <path d="M300 148 L265 260 L310 255" stroke="#3B82F6" stroke-width="32" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Left arm (forward) -->
+  <path d="M285 185 L215 225" stroke="#3B82F6" stroke-width="26" fill="none" stroke-linecap="round"/>
+  <!-- Right arm (back) -->
+  <path d="M300 178 L365 148" stroke="#3B82F6" stroke-width="26" fill="none" stroke-linecap="round"/>
+  <!-- Left leg (forward/up) -->
+  <path d="M265 260 L210 340 L175 340" stroke="#3B82F6" stroke-width="28" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Right leg (back/down) -->
+  <path d="M300 255 L330 370 L370 380" stroke="#60A5FA" stroke-width="28" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Marathon distance text -->
+  <text x="256" y="450" font-size="52" font-weight="bold" text-anchor="middle" fill="#3B82F6" font-family="Arial, sans-serif">42.2K</text>
+</svg>
