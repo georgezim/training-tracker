@@ -113,6 +113,19 @@ export interface WorkoutInfo {
   color: 'blue' | 'purple' | 'orange' | 'gray' | 'red';
 }
 
+export interface WorkoutStep {
+  icon: string;
+  title: string;
+  detail: string;
+}
+
+export interface WorkoutDetail {
+  duration: string;
+  intensity: string;
+  steps: WorkoutStep[];
+  keyPoints: string[];
+}
+
 // Long run distances by week (Saturday)
 const LONG_RUN_KM: Record<number, number> = {
   1: 5,   2: 6,   3: 8,   4: 10,  5: 11,  6: 13,   // Phase 1
@@ -274,6 +287,289 @@ export function getWorkoutForDate(date: Date): WorkoutInfo {
     default:
       return { type: 'rest', label: 'REST', description: '', color: 'gray' };
   }
+}
+
+// ─── Structured workout detail ────────────────────────────────────────────────
+
+export function getWorkoutDetail(date: Date): WorkoutDetail {
+  const dateStr = dateToString(date);
+  const week = getWeekNumber(date);
+  const phase = getPhase(week);
+  const day = getPlanDayIndex(date);
+
+  // Race days
+  if (RACES[dateStr]) {
+    const race = RACES[dateStr];
+    return {
+      duration: 'All day',
+      intensity: 'Race effort',
+      steps: [
+        { icon: '🌅', title: 'Morning', detail: 'Wake up 3h before start. Eat your usual pre-run breakfast — nothing new today.' },
+        { icon: '👟', title: 'Warm-up', detail: '10 min easy jog + 4 strides. Get the legs turning over before the gun.' },
+        { icon: '🏃', title: 'Race', detail: `${race.distance} — Start conservative, negative split. Don't go out too fast in the first 5km.` },
+        { icon: '🧊', title: 'Recovery', detail: 'Walk for 10–15 min after finishing. Eat within 30 min. Ice any sore spots.' },
+      ],
+      keyPoints: [
+        'Trust the training — you have prepared for this',
+        'Start 10–15 sec/km slower than goal pace for the first 5km',
+        'Drink at every aid station even if not thirsty',
+        'Focus on form when tired: tall posture, relaxed shoulders',
+      ],
+    };
+  }
+
+  if (week <= 0) {
+    return {
+      duration: '—',
+      intensity: 'Pre-plan rest',
+      steps: [{ icon: '📅', title: 'Plan starts April 14', detail: 'Use this time to prepare gear, plan your nutrition, and get good sleep.' }],
+      keyPoints: ['Plan starts Monday April 14, 2026'],
+    };
+  }
+
+  // Monday — Run
+  if (day === 0) {
+    const desc = MONDAY_RUN[week] || 'Easy run';
+    const isEasy = week <= 6;
+    const hasStrides = week >= 4 && week <= 6;
+    const isTempo = week >= 7 && week <= 9;
+    const isMP = week >= 11;
+    const isPreRace = week === 10 || week === 22 || week === 31;
+
+    if (isPreRace) {
+      return {
+        duration: '35–40 min',
+        intensity: 'Easy — Zone 2',
+        steps: [
+          { icon: '🚶', title: 'Warm-up', detail: '5 min easy walk to loosen up.' },
+          { icon: '🏃', title: 'Easy run', detail: desc + '. Keep it purely conversational — this is just to keep the legs moving before race day.' },
+          { icon: '🚶', title: 'Cool-down', detail: '5 min walk + full body stretch (quads, calves, hamstrings, hip flexors).' },
+        ],
+        keyPoints: [
+          'Race is coming — protect the legs, no heroics today',
+          'HR should stay in Zone 1–2 the whole time',
+          'Focus on sleep and hydration this week',
+        ],
+      };
+    }
+
+    if (isEasy && !hasStrides) {
+      return {
+        duration: '30–40 min',
+        intensity: 'Easy — Zone 2',
+        steps: [
+          { icon: '🚶', title: 'Warm-up', detail: '5 min brisk walk to wake the legs up.' },
+          { icon: '🏃', title: 'Easy run', detail: desc + '. Completely conversational pace — you should be able to hold a full sentence.' },
+          { icon: '🚶', title: 'Cool-down', detail: '5 min walk + calf stretches, quad stretches, hip flexor stretch (60 sec each).' },
+        ],
+        keyPoints: [
+          'Easy means EASY — HR Zone 2, not Zone 3',
+          'If in doubt, slow down. You build aerobic base here.',
+          'Focus on relaxed form: tall posture, low arm carry',
+        ],
+      };
+    }
+
+    if (hasStrides) {
+      return {
+        duration: '40–50 min',
+        intensity: 'Easy + short accelerations',
+        steps: [
+          { icon: '🚶', title: 'Warm-up', detail: '5 min walk.' },
+          { icon: '🏃', title: 'Easy run', detail: desc.split('+')[0].trim() + ' at easy conversational pace.' },
+          { icon: '⚡', title: 'Strides', detail: '4 × 80m accelerations. Start easy, build to ~90% effort over 80m. Walk back fully to recover between each.' },
+          { icon: '🚶', title: 'Cool-down', detail: '5 min walk + stretching.' },
+        ],
+        keyPoints: [
+          'Strides are NOT sprints — smooth controlled acceleration',
+          'Full recovery between strides (walk back slowly)',
+          'Focus on quick light footstrike and upright posture',
+        ],
+      };
+    }
+
+    if (isTempo) {
+      const parts = desc.match(/(\d+)km WU.*?(\d+)km tempo.*?(\d+)km CD/);
+      const wu = parts?.[1] ?? '2';
+      const main = parts?.[2] ?? '4';
+      const cd = parts?.[3] ?? '2';
+      return {
+        duration: `${parseInt(wu) + parseInt(main) + parseInt(cd)} km / ~${Math.round((parseInt(wu) + parseInt(main) + parseInt(cd)) * 6.5)} min`,
+        intensity: 'Moderate — Tempo effort',
+        steps: [
+          { icon: '🚶', title: 'Warm-up', detail: `${wu}km very easy jog — genuinely easy, HR Zone 2. Don't skip this.` },
+          { icon: '🔥', title: 'Tempo', detail: `${main}km at comfortably hard pace — you can speak 3–4 words but not hold a conversation. HR Zone 4 (~155–168 bpm). Steady, not surging.` },
+          { icon: '🧊', title: 'Cool-down', detail: `${cd}km easy jog back to easy breathing, then 5 min walk + stretching.` },
+        ],
+        keyPoints: [
+          'Tempo = "comfortably hard" not "as fast as possible"',
+          'If you can hold a full conversation, speed up slightly',
+          'If you can\'t speak at all, you\'re going too fast',
+          'Eccentric heel drops after (3 × 15 each leg)',
+        ],
+      };
+    }
+
+    if (isMP) {
+      const parts = desc.match(/(\d+)km.*?(\d+)km @ MP.*?(\d+)km CD/);
+      const total = desc.match(/^(\d+)km/)?.[1] ?? '10';
+      const mp = parts?.[2] ?? '6';
+      const cd = parts?.[3] ?? '2';
+      const wu = parseInt(total) - parseInt(mp) - parseInt(cd);
+      return {
+        duration: `${total} km`,
+        intensity: 'Mixed — Easy + Marathon Pace',
+        steps: [
+          { icon: '🚶', title: 'Warm-up', detail: `${wu}km easy — conversational, get the body warm and loose.` },
+          { icon: '🎯', title: 'Marathon pace', detail: `${mp}km at your goal marathon pace. This is race simulation — steady, controlled, sustainable. Aim for consistent splits.` },
+          { icon: '🧊', title: 'Cool-down', detail: `${cd}km very easy jog, then walk 5 min, full stretch.` },
+        ],
+        keyPoints: [
+          'Marathon pace should feel "controlled hard" — not a sprint, not easy',
+          'Aim for even splits across the MP section',
+          'Practice your race day breathing pattern',
+          'Fuel within 30 min after finishing',
+        ],
+      };
+    }
+
+    return {
+      duration: '~45 min',
+      intensity: 'Easy — Zone 2',
+      steps: [
+        { icon: '🚶', title: 'Warm-up', detail: '5 min walk.' },
+        { icon: '🏃', title: 'Run', detail: desc },
+        { icon: '🚶', title: 'Cool-down', detail: '5 min walk + stretching.' },
+      ],
+      keyPoints: ['Keep it easy and consistent'],
+    };
+  }
+
+  // Tuesday / Thursday — Gym
+  if (day === 1 || day === 3) {
+    const isThursdayPhase3Plus = day === 3 && phase >= 3;
+    return {
+      duration: isThursdayPhase3Plus ? '75–90 min' : '60–75 min',
+      intensity: 'Strength',
+      steps: [
+        { icon: '🔥', title: 'Gym class', detail: 'Your regular strength class. Focus on engagement — glutes, core, single-leg stability.' },
+        { icon: '🦵', title: 'Eccentric heel drops', detail: '3 × 15 reps each leg. Stand on a step, rise up on both feet, lower slowly on one foot (4 sec down). This is your Achilles protection — do not skip.' },
+        ...(isThursdayPhase3Plus ? [
+          { icon: '🏃', title: 'Immediate easy run', detail: '20–30 min easy jog straight after the gym — legs will be tired, that\'s the point. Simulates the marathon feeling of running on fatigued muscles.' },
+        ] : []),
+        { icon: '🧊', title: 'Post-session', detail: 'Ice calves/Achilles if any soreness. Eat protein within 30 min.' },
+      ],
+      keyPoints: [
+        'Eccentric heel drops are non-negotiable for Achilles health',
+        'Slow the eccentric (lowering) phase right down — 3–4 seconds',
+        ...(isThursdayPhase3Plus ? ['Thursday run is about fatigue tolerance, not pace — go very easy'] : []),
+        'Prioritise sleep tonight — recovery happens at night',
+      ],
+    };
+  }
+
+  // Wednesday — Bike
+  if (day === 2) {
+    const dur = getBikeDuration(week);
+    return {
+      duration: dur,
+      intensity: 'Zone 2 — Aerobic',
+      steps: [
+        { icon: '🚴', title: 'Warm-up', detail: '5 min easy spinning to warm the legs.' },
+        { icon: '🎯', title: 'Zone 2 ride', detail: `${dur} at steady aerobic effort — you should be able to hold a conversation comfortably. HR ~120–140 bpm. This builds your aerobic engine without accumulating fatigue.` },
+        { icon: '🧘', title: 'Cool-down', detail: '5 min easy, then off the bike and stretch (hip flexors, quads, lower back).' },
+      ],
+      keyPoints: [
+        'Zone 2 = conversational pace, not "easy but I could go harder"',
+        'Resistance low enough that you never feel out of breath',
+        'This session actively speeds up recovery from Tuesday gym',
+        'Hydrate well — easy to forget on the bike',
+      ],
+    };
+  }
+
+  // Friday — REST
+  if (day === 4) {
+    return {
+      duration: 'All day',
+      intensity: 'Complete rest',
+      steps: [
+        { icon: '😴', title: 'Sleep in', detail: 'Extra sleep tonight directly boosts Saturday performance. Aim for 8–9 hours.' },
+        { icon: '🥗', title: 'Nutrition', detail: 'Eat well today — complex carbs at lunch and dinner to top up glycogen for tomorrow\'s long run.' },
+        { icon: '💧', title: 'Hydration', detail: 'Drink 2–3L water throughout the day. Avoid heavy alcohol.' },
+        { icon: '🎒', title: 'Prepare kit', detail: 'Lay out tomorrow\'s gear tonight. Plan your route and nutrition (gels/water) in advance.' },
+      ],
+      keyPoints: [
+        'Rest is training — this is where you absorb this week\'s work',
+        'Prep your kit tonight so tomorrow morning is stress-free',
+        'Big Saturday run needs good sleep + food today',
+      ],
+    };
+  }
+
+  // Saturday — Long Run
+  if (day === 5) {
+    const km = LONG_RUN_KM[week];
+    if (!km) {
+      return {
+        duration: '—',
+        intensity: 'Easy',
+        steps: [{ icon: '🚶', title: 'Light movement', detail: 'Easy walk or gentle stretch. Nothing structured.' }],
+        keyPoints: [],
+      };
+    }
+    const estMin = Math.round(km * (phase <= 2 ? 7.5 : 7));
+    const h = Math.floor(estMin / 60);
+    const m = estMin % 60;
+    const durationStr = h > 0 ? `${h}h ${m}min` : `~${m} min`;
+
+    const steps: WorkoutStep[] = [
+      { icon: '🚶', title: 'Warm-up', detail: '10 min brisk walk before you start running. Hips, ankles, glutes — get mobile.' },
+    ];
+
+    if (phase === 1) {
+      steps.push({ icon: '🏃', title: `${km}km easy run`, detail: 'Fully conversational the entire way. HR Zone 2 — if you can\'t speak a sentence, slow down. No pressure on pace.' });
+    } else if (phase === 2) {
+      steps.push({ icon: '🏃', title: `${km - 2}km easy`, detail: 'Easy Zone 2 for the first portion. Just cruising.' });
+      steps.push({ icon: '🎯', title: 'Final 2km at MP', detail: 'Lift to marathon pace for the last 2km. Get a feel for race effort on tired legs.' });
+    } else {
+      const mpKm = Math.round(km * 0.4);
+      steps.push({ icon: '🏃', title: `${km - mpKm}km easy`, detail: 'Zone 2 easy running — don\'t go faster than necessary.' });
+      steps.push({ icon: '🎯', title: `${mpKm}km at marathon pace`, detail: 'Build to marathon pace. This is the key training stimulus — practise running fast when tired.' });
+      steps.push({ icon: '🍌', title: 'Nutrition', detail: 'Take a gel or fuel every 40 min. Practice your race day nutrition strategy — nothing new on race day.' });
+    }
+
+    steps.push({ icon: '🚶', title: 'Cool-down', detail: '10 min walk. Full stretch: calves, quads, hamstrings, hip flexors, IT band. Foam roll if available.' });
+    steps.push({ icon: '🍽️', title: 'Recovery meal', detail: 'Eat a proper meal within 45 min: protein + carbs. Chocolate milk, rice + chicken, or a recovery shake.' });
+
+    return {
+      duration: durationStr,
+      intensity: phase <= 1 ? 'Easy — Zone 2' : phase === 2 ? 'Easy + MP finish' : 'Mixed — Zone 2 + Marathon Pace',
+      steps,
+      keyPoints: [
+        'The long run builds everything — consistency is more important than pace',
+        phase >= 3 ? 'Fuel every 40 min — no heroics, eat on schedule' : 'HR Zone 2 the whole time — slow down if needed',
+        'Walk breaks are fine, especially on hot days',
+        'How you feel the next day matters — don\'t dig a hole',
+      ],
+    };
+  }
+
+  // Sunday — REST
+  return {
+    duration: '—',
+    intensity: 'Active recovery',
+    steps: [
+      { icon: '🚶', title: 'Easy walk', detail: '20–30 min gentle walk if legs allow. No running.' },
+      { icon: '🧘', title: 'Stretch & foam roll', detail: 'Full body stretch: calves, Achilles, quads, hamstrings, hip flexors, glutes. 10 min foam rolling.' },
+      { icon: '🍽️', title: 'Eat well', detail: 'Focus on protein and carbs to replenish after Saturday\'s long run.' },
+    ],
+    keyPoints: [
+      'Sunday is recovery — the work is done',
+      'Gentle movement helps flush out lactic acid',
+      'Hydrate and eat well — long run recovery takes 24–36h',
+    ],
+  };
 }
 
 // ─── Colour helpers (exported for reuse across pages) ────────────────────────

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase, CompletedSession } from '@/lib/supabase';
 import {
   getWorkoutForDate,
+  getWorkoutDetail,
   getDaysInCurrentWeek,
   getWeekNumber,
   getPhase,
@@ -11,8 +12,11 @@ import {
   dateToString,
   COLOR_BG,
   COLOR_TEXT,
+  WorkoutInfo,
+  WorkoutDetail,
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
+import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -32,6 +36,7 @@ export default function WeekPage() {
 
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDay, setSelectedDay] = useState<{ workout: WorkoutInfo; detail: WorkoutDetail; label: string } | null>(null);
 
   useEffect(() => {
     if (days.length === 0) return;
@@ -128,7 +133,12 @@ export default function WeekPage() {
           return (
             <div
               key={dayStr}
-              className={`rounded-xl p-4 flex items-center gap-3 transition-all ${
+              onClick={() => setSelectedDay({
+                workout,
+                detail: getWorkoutDetail(day),
+                label: `${DAY_NAMES[i]} ${day.getDate()} ${day.toLocaleString('default', { month: 'short' })}`,
+              })}
+              className={`rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer active:scale-[0.98] ${
                 isToday
                   ? 'bg-gray-800 ring-1 ring-white/20'
                   : 'bg-gray-900'
@@ -195,6 +205,15 @@ export default function WeekPage() {
       </main>
 
       <BottomNav active="week" />
+
+      {selectedDay && (
+        <WorkoutDetailSheet
+          workout={selectedDay.workout}
+          detail={selectedDay.detail}
+          dateLabel={selectedDay.label}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
     </div>
   );
 }

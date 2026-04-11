@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase, DailyCheckin, CompletedSession } from '@/lib/supabase';
 import {
   getWorkoutForDate,
+  getWorkoutDetail,
   getWeekNumber,
   getPhase,
   PHASE_NAMES,
@@ -12,6 +13,7 @@ import {
   COLOR_BG,
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
+import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 
 const FEELING_EMOJI: Record<string, string> = {
   great: '🟢',
@@ -77,6 +79,7 @@ export default function TodayPage() {
   const [session, setSession] = useState<CompletedSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -156,7 +159,10 @@ export default function TodayPage() {
         <p className="text-gray-500 text-sm">{dateLabel}</p>
 
         {/* ── Workout Card ── */}
-        <div className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden`}>
+        <div
+          className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
+          onClick={() => setShowDetail(true)}
+        >
           {/* Subtle background texture */}
           <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-white to-transparent" />
           <div className="relative">
@@ -173,10 +179,11 @@ export default function TodayPage() {
             </div>
             <h2 className="text-white text-2xl font-bold leading-tight">{workout.label}</h2>
             <p className="text-white/75 text-sm mt-2 leading-relaxed">{workout.description}</p>
+            <p className="text-white/40 text-xs mt-2">Tap for full workout details →</p>
 
             {workout.type !== 'rest' && (
               <button
-                onClick={toggleSession}
+                onClick={(e) => { e.stopPropagation(); toggleSession(); }}
                 disabled={toggling}
                 className={`mt-4 w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
                   session
@@ -250,6 +257,15 @@ export default function TodayPage() {
       </main>
 
       <BottomNav active="today" />
+
+      {showDetail && (
+        <WorkoutDetailSheet
+          workout={workout}
+          detail={getWorkoutDetail(today)}
+          dateLabel={dateLabel}
+          onClose={() => setShowDetail(false)}
+        />
+      )}
     </div>
   );
 }
