@@ -19,15 +19,23 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export default function WeekPage() {
   const today = new Date();
   const todayStr = dateToString(today);
-  const days = getDaysInCurrentWeek(today);
-  const week = getWeekNumber(today);
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Build the anchor date by shifting today by weekOffset weeks
+  const anchorDate = new Date(today);
+  anchorDate.setDate(today.getDate() + weekOffset * 7);
+
+  const days = getDaysInCurrentWeek(anchorDate);
+  const week = getWeekNumber(anchorDate);
   const phase = getPhase(week);
+  const isCurrentWeek = weekOffset === 0;
 
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (days.length === 0) return;
+    setLoading(true);
     const startStr = dateToString(days[0]);
     const endStr = dateToString(days[6]);
     supabase
@@ -39,7 +47,7 @@ export default function WeekPage() {
         if (data) setSessions(data as CompletedSession[]);
         setLoading(false);
       });
-  }, [todayStr]);
+  }, [weekOffset]);
 
   return (
     <div className="min-h-screen bg-gray-950" style={{ paddingBottom: '5.5rem' }}>
@@ -50,16 +58,42 @@ export default function WeekPage() {
       >
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
-            <h1 className="text-white text-xl font-bold">This Week</h1>
-            {week > 0 && week <= 31 && (
-              <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
-                W{week} / 31
-              </span>
-            )}
+            <button
+              onClick={() => setWeekOffset(w => w - 1)}
+              className="text-white/60 hover:text-white text-2xl leading-none px-1 active:scale-90 transition-transform"
+              aria-label="Previous week"
+            >‹</button>
+
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2">
+                <h1 className="text-white text-xl font-bold">
+                  {isCurrentWeek ? 'This Week' : week > 0 && week <= 31 ? `Week ${week}` : 'Pre-Plan'}
+                </h1>
+                {week > 0 && week <= 31 && (
+                  <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
+                    W{week} / 31
+                  </span>
+                )}
+              </div>
+              {week > 0 && week <= 31 && (
+                <p className="text-blue-300/80 text-sm mt-0.5">{PHASE_NAMES[phase]}</p>
+              )}
+              {!isCurrentWeek && (
+                <button
+                  onClick={() => setWeekOffset(0)}
+                  className="text-blue-400 text-xs mt-1 underline underline-offset-2"
+                >
+                  back to today
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setWeekOffset(w => w + 1)}
+              className="text-white/60 hover:text-white text-2xl leading-none px-1 active:scale-90 transition-transform"
+              aria-label="Next week"
+            >›</button>
           </div>
-          {week > 0 && week <= 31 && (
-            <p className="text-blue-300/80 text-sm mt-0.5">{PHASE_NAMES[phase]}</p>
-          )}
         </div>
       </header>
 
