@@ -17,7 +17,6 @@ async function getFreshToken(): Promise<string | null> {
 
   const nowSec = Math.floor(Date.now() / 1000);
 
-  // Refresh if expired (or within 5 min of expiry)
   if (row.expires_at < nowSec + 300) {
     const res = await fetch('https://www.strava.com/oauth/token', {
       method: 'POST',
@@ -43,12 +42,49 @@ async function getFreshToken(): Promise<string | null> {
   return row.access_token;
 }
 
+// Fetch ALL activities from Strava by paginating until empty page
+async function fetchAllActivities(token: string): Promise<any[]> {
+  const all: any[] = [];
+  let page = 1;
+  while (true) {
+    const res = await fetch(
+      `https://www.strava.com/api/v3/athlete/activities?per_page=200&page=${page}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) break;
+    const batch = await res.json();
+    if (!batch || batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < 200) break; // last page
+    page++;
+  }
+  return all;
+}
+
+function toRow(a: any) {
+  return {
+    strava_id: a.id,
+    activity_date: a.start_date_local.slice(0, 10),
+    name: a.name,
+    sport_type: a.sport_type,
+    distance_m: a.distance,
+    moving_time_s: a.moving_time,
+    elevation_m: a.total_elevation_gain,
+    avg_heartrate: a.average_heartrate ?? null,
+    max_heartrate: a.max_heartrate ?? null,
+    avg_speed_ms: a.average_speed,
+    strava_url: `https://www.strava.com/activities/${a.id}`,
+    raw: a,
+    synced_at: new Date().toISOString(),
+  };
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  // Optional: ?date=2026-04-14 to filter to a specific date
   const dateFilter = searchParams.get('date');
+  const fullSync = searchParams.get('full') === '1';
 
-  // Check if connected
+  // Check connection
   const { data: tokenRow } = await supabase
     .from('strava_tokens')
     .select('athlete_id')
@@ -59,8 +95,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: false, activities: [] });
   }
 
-  // If requesting a specific date, check cache first
-  if (dateFilter) {
+  // For a date lookup, serve from cache if available and no full sync requested
+  if (dateFilter && !fullSync) {
     const { data: cached } = await supabase
       .from('strava_activities')
       .select('*')
@@ -72,52 +108,29 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Fetch from Strava API
   const token = await getFreshToken();
   if (!token) {
     return NextResponse.json({ connected: false, activities: [] });
   }
 
-  // Fetch last 60 days of activities
-  const after = Math.floor(Date.now() / 1000) - 60 * 24 * 60 * 60;
-  const stravaRes = await fetch(
-    `https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=100`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  const activities = await fetchAllActivities(token);
 
-  if (!stravaRes.ok) {
-    return NextResponse.json({ connected: true, activities: [], error: 'strava_fetch_failed' });
-  }
-
-  const activities = await stravaRes.json();
-
-  // Upsert all into cache
+  // Upsert everything into cache in batches of 100
   if (activities.length > 0) {
-    const rows = activities.map((a: any) => ({
-      strava_id: a.id,
-      activity_date: a.start_date_local.slice(0, 10),
-      name: a.name,
-      sport_type: a.sport_type,
-      distance_m: a.distance,
-      moving_time_s: a.moving_time,
-      elevation_m: a.total_elevation_gain,
-      avg_heartrate: a.average_heartrate ?? null,
-      max_heartrate: a.max_heartrate ?? null,
-      avg_speed_ms: a.average_speed,
-      strava_url: `https://www.strava.com/activities/${a.id}`,
-      raw: a,
-      synced_at: new Date().toISOString(),
-    }));
-    await supabase.from('strava_activities').upsert(rows, { onConflict: 'strava_id' });
+    const rows = activities.map(toRow);
+    for (let i = 0; i < rows.length; i += 100) {
+      await supabase
+        .from('strava_activities')
+        .upsert(rows.slice(i, i + 100), { onConflict: 'strava_id' });
+    }
   }
 
-  // If date filter, return only that day
   if (dateFilter) {
     const filtered = activities.filter((a: any) =>
       a.start_date_local.slice(0, 10) === dateFilter
     );
-    return NextResponse.json({ connected: true, activities: filtered, source: 'strava' });
+    return NextResponse.json({ connected: true, activities: filtered, source: 'strava', total: activities.length });
   }
 
-  return NextResponse.json({ connected: true, activities, source: 'strava' });
+  return NextResponse.json({ connected: true, activities, source: 'strava', total: activities.length });
 }

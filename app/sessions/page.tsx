@@ -66,7 +66,7 @@ export default function SessionsPage() {
 
   async function syncNow() {
     setLoading(true);
-    await fetch('/api/strava/activities');
+    await fetch('/api/strava/activities?full=1');
     const { data } = await supabase
       .from('strava_activities')
       .select('*')
