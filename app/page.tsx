@@ -281,6 +281,19 @@ export default function TodayPage() {
           </a>
         )}
 
+        {stravaConnected === true && !stravaActivity && (
+          <div className="flex items-center gap-3 bg-green-950/50 border border-green-800/40 rounded-2xl px-4 py-3">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FC4C02">
+              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+            </svg>
+            <div>
+              <p className="text-green-300 text-sm font-semibold">Strava connected</p>
+              <p className="text-green-400/60 text-xs">No activity logged for today yet</p>
+            </div>
+            <span className="ml-auto text-green-500 text-base">✓</span>
+          </div>
+        )}
+
         {stravaActivity && (
           <StravaActivityCard
             activity={stravaActivity}

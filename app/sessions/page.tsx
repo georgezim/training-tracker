@@ -43,37 +43,38 @@ function formatDate(dateStr: string) {
 export default function SessionsPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
 
-  useEffect(() => {
-    // Check if Strava connected
-    supabase.from('strava_tokens').select('id').eq('id', 1).maybeSingle().then(({ data }) => {
-      setConnected(!!data);
-    });
-
-    // Load from cache
-    supabase
-      .from('strava_activities')
-      .select('*')
-      .order('activity_date', { ascending: false })
-      .limit(200)
-      .then(({ data }) => {
-        if (data) setActivities(data as Activity[]);
-        setLoading(false);
-      });
-  }, []);
-
-  async function syncNow() {
-    setLoading(true);
-    await fetch('/api/strava/activities?full=1');
+  async function loadFromCache() {
     const { data } = await supabase
       .from('strava_activities')
       .select('*')
       .order('activity_date', { ascending: false })
-      .limit(200);
+      .limit(500);
     if (data) setActivities(data as Activity[]);
-    setLoading(false);
+  }
+
+  useEffect(() => {
+    async function init() {
+      const { data: tokenData } = await supabase.from('strava_tokens').select('id').eq('id', 1).maybeSingle();
+      const isConnected = !!tokenData;
+      setConnected(isConnected);
+
+      if (isConnected) {
+        await loadFromCache();
+      }
+      setLoading(false);
+    }
+    init();
+  }, []);
+
+  async function syncNow() {
+    setSyncing(true);
+    await fetch('/api/strava/activities?full=1');
+    await loadFromCache();
+    setSyncing(false);
   }
 
   const filtered = activities.filter((a) => {
@@ -95,18 +96,32 @@ export default function SessionsPage() {
       >
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
-            <h1 className="text-white text-xl font-bold">Sessions</h1>
+            <h1 className="text-white text-xl font-bold">Training Sessions</h1>
             {connected && (
               <button
                 onClick={syncNow}
-                className="text-blue-300 text-xs font-medium bg-blue-900/40 px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+                disabled={syncing}
+                className="flex items-center gap-1.5 text-blue-300 text-xs font-medium bg-blue-900/40 px-3 py-1.5 rounded-full active:scale-95 transition-transform disabled:opacity-60"
               >
-                Sync
+                {syncing ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-blue-300/40 border-t-blue-300 rounded-full animate-spin inline-block" />
+                    Syncing…
+                  </>
+                ) : (
+                  <>↻ Sync Strava</>
+                )}
               </button>
             )}
           </div>
-          {connected === false && (
-            <p className="text-blue-300/70 text-sm mt-1">Connect Strava on Home to see sessions</p>
+          {connected === false && !loading && (
+            <p className="text-blue-300/70 text-sm mt-1">Go to Home and connect Strava to import your sessions</p>
+          )}
+          {connected && activities.length === 0 && !loading && (
+            <p className="text-blue-300/70 text-sm mt-1">Tap "Sync Strava" to import your full history</p>
+          )}
+          {connected && activities.length > 0 && (
+            <p className="text-green-400/70 text-sm mt-1">✓ Strava connected · {activities.length} activities</p>
           )}
         </div>
       </header>
