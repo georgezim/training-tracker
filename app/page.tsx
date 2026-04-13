@@ -220,7 +220,7 @@ export default function TodayPage() {
         )}
 
         {/* ── Strava ── */}
-        {stravaConnected === false && workout.type !== 'rest' && (
+        {stravaConnected === false && (
           <a
             href="/api/strava/auth"
             className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 hover:border-[#FC4C02]/40 transition-colors"
