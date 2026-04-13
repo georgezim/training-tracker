@@ -14,6 +14,8 @@ import {
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
+import StravaActivityCard from '@/components/StravaActivityCard';
+import { useStravaActivity } from '@/lib/useStravaActivity';
 
 const FEELING_EMOJI: Record<string, string> = {
   great: '🟢',
@@ -80,6 +82,7 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   useEffect(() => {
     async function load() {
@@ -214,6 +217,32 @@ export default function TodayPage() {
               Keep today easy. Focus on sleep and nutrition tonight.
             </p>
           </div>
+        )}
+
+        {/* ── Strava ── */}
+        {stravaConnected === false && workout.type !== 'rest' && (
+          <a
+            href="/api/strava/auth"
+            className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 hover:border-[#FC4C02]/40 transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FC4C02">
+              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+            </svg>
+            <div>
+              <p className="text-white text-sm font-semibold">Connect Strava</p>
+              <p className="text-gray-500 text-xs">Auto-import your runs and rides</p>
+            </div>
+            <span className="ml-auto text-gray-600 text-sm">→</span>
+          </a>
+        )}
+
+        {stravaActivity && (
+          <StravaActivityCard
+            activity={stravaActivity}
+            plannedKm={
+              workout.label.match(/(\d+)km/) ? parseFloat(workout.label.match(/(\d+)km/)![1]) : undefined
+            }
+          />
         )}
 
         {/* ── Today's Check-in ── */}
