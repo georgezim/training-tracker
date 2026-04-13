@@ -48,9 +48,12 @@ export default function SessionsPage() {
   const [filter, setFilter] = useState<Filter>('all');
 
   async function loadFromCache() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     const { data } = await supabase
       .from('strava_activities')
       .select('*')
+      .eq('user_id', user.id)
       .order('activity_date', { ascending: false })
       .limit(500);
     if (data) setActivities(data as Activity[]);
