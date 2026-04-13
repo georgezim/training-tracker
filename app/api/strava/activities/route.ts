@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUserId } from '@/lib/api-auth';
+import { getWorkoutForDate, isRunWorkout, isBikeWorkout, isGymWorkout } from '@/lib/training-plan';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -74,6 +75,52 @@ function toRow(a: any, userId: string) {
   };
 }
 
+async function autoMarkSessions(activities: any[], userId: string) {
+  // Build a map of date → matched workout types from Strava activities
+  const matches: Record<string, string> = {};
+
+  for (const a of activities) {
+    const dateStr = a.start_date_local.slice(0, 10);
+    const date = new Date(dateStr + 'T12:00:00');
+    const workout = getWorkoutForDate(date);
+    if (workout.type === 'rest') continue;
+
+    const sport = a.sport_type as string;
+    const isMatch =
+      (isRunWorkout(workout.type) && /run/i.test(sport)) ||
+      (isBikeWorkout(workout.type) && /ride|cycling/i.test(sport)) ||
+      (isGymWorkout(workout.type) && /weight|crossfit|workout|strength/i.test(sport));
+
+    if (isMatch) matches[dateStr] = workout.type;
+  }
+
+  if (Object.keys(matches).length === 0) return;
+
+  // Fetch existing sessions for those dates so we don't overwrite 'missed' entries
+  const dates = Object.keys(matches);
+  const { data: existing } = await supabase
+    .from('completed_sessions')
+    .select('date, session_type, status')
+    .eq('user_id', userId)
+    .in('date', dates);
+
+  const existingSet = new Set((existing ?? []).map(s => `${s.date}::${s.session_type}`));
+
+  const toInsert = dates
+    .filter(d => !existingSet.has(`${d}::${matches[d]}`))
+    .map(d => ({
+      user_id: userId,
+      date: d,
+      session_type: matches[d],
+      completed: true,
+      status: 'done',
+    }));
+
+  if (toInsert.length > 0) {
+    await supabase.from('completed_sessions').insert(toInsert);
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const dateFilter = searchParams.get('date');
@@ -107,6 +154,9 @@ export async function GET(req: NextRequest) {
       await supabase.from('strava_activities')
         .upsert(rows.slice(i, i + 100), { onConflict: 'strava_id' });
     }
+
+    // Auto-mark sessions as done when a matching Strava activity exists
+    await autoMarkSessions(activities, userId);
   }
 
   if (dateFilter) {

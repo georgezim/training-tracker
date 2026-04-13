@@ -89,6 +89,8 @@ export default function TodayPage() {
   const [toggling, setToggling] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [showMissedModal, setShowMissedModal] = useState(false);
+  const [missedReason, setMissedReason] = useState('');
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   // Read Strava OAuth result from URL params
@@ -168,20 +170,33 @@ export default function TodayPage() {
 
   async function toggleSession() {
     if (toggling || workout.type === 'rest') return;
+    if (!userId) return;
     setToggling(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setToggling(false); return; }
-    if (session) {
-      await supabase.from('completed_sessions').delete().eq('id', session.id);
-      setSession(null);
-    } else {
-      const { data } = await supabase
-        .from('completed_sessions')
-        .upsert({ user_id: user.id, date: todayStr, session_type: workout.type, completed: true }, { onConflict: 'user_id,date,session_type' })
-        .select()
-        .single();
-      if (data) setSession(data as CompletedSession);
-    }
+    const { data } = await supabase
+      .from('completed_sessions')
+      .upsert({ user_id: userId, date: todayStr, session_type: workout.type, completed: true, status: 'done' }, { onConflict: 'user_id,date,session_type' })
+      .select().single();
+    if (data) setSession(data as CompletedSession);
+    setToggling(false);
+  }
+
+  async function markMissed(reason: string) {
+    if (!userId) return;
+    setToggling(true);
+    const { data } = await supabase
+      .from('completed_sessions')
+      .upsert({ user_id: userId, date: todayStr, session_type: workout.type, completed: false, status: 'missed', missed_reason: reason || null }, { onConflict: 'user_id,date,session_type' })
+      .select().single();
+    if (data) setSession(data as CompletedSession);
+    setMissedReason('');
+    setToggling(false);
+  }
+
+  async function clearSession() {
+    if (!session) return;
+    setToggling(true);
+    await supabase.from('completed_sessions').delete().eq('id', session.id);
+    setSession(null);
     setToggling(false);
   }
 
@@ -262,17 +277,37 @@ export default function TodayPage() {
             <p className="text-white/40 text-xs mt-2">Tap for full workout details →</p>
 
             {workout.type !== 'rest' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleSession(); }}
-                disabled={toggling}
-                className={`mt-4 w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
-                  session
-                    ? 'bg-green-500/20 text-green-300 border border-green-500/40'
-                    : 'bg-white text-gray-900 shadow-sm'
-                }`}
-              >
-                {toggling ? '…' : session ? '✓  Completed' : 'Mark as Done'}
-              </button>
+              <div className="mt-4" onClick={e => e.stopPropagation()}>
+                {toggling && <div className="py-3 text-center text-white/50 text-sm">…</div>}
+
+                {!toggling && !session && (
+                  <div className="flex gap-2">
+                    <button onClick={toggleSession} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white text-gray-900 shadow-sm active:scale-95 transition-transform">
+                      ✓ Done
+                    </button>
+                    <button onClick={() => setShowMissedModal(true)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-red-900/40 text-red-300 border border-red-700/30 active:scale-95 transition-transform">
+                      ✗ Didn't Do
+                    </button>
+                  </div>
+                )}
+
+                {!toggling && session?.status === 'done' && (
+                  <button onClick={clearSession} className="w-full py-3 rounded-xl font-bold text-sm bg-green-500/20 text-green-300 border border-green-500/40 active:scale-95 transition-transform">
+                    ✓ Completed · tap to undo
+                  </button>
+                )}
+
+                {!toggling && session?.status === 'missed' && (
+                  <div className="space-y-1">
+                    <button onClick={() => { setMissedReason(session.missed_reason ?? ''); setShowMissedModal(true); }} className="w-full py-3 rounded-xl font-bold text-sm bg-red-900/40 text-red-300 border border-red-700/30 active:scale-95 transition-transform">
+                      ✗ Missed{session.missed_reason ? ` — ${session.missed_reason.slice(0, 28)}${session.missed_reason.length > 28 ? '…' : ''}` : ''}
+                    </button>
+                    <button onClick={clearSession} className="w-full py-1.5 text-xs text-gray-600 active:scale-95 transition-transform">
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -462,6 +497,35 @@ export default function TodayPage() {
             <button onClick={saveRaceEdits} className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">
               Save
             </button>
+          </div>
+        </>
+      )}
+
+      {/* Missed reason modal */}
+      {showMissedModal && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setShowMissedModal(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-4"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-bold text-lg">Why did you miss it?</h3>
+            <textarea
+              value={missedReason}
+              onChange={e => setMissedReason(e.target.value.slice(0, 200))}
+              rows={3}
+              placeholder="Feeling tired, work got busy, minor pain…"
+              autoFocus
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-red-500 resize-none transition-colors"
+            />
+            <p className="text-gray-600 text-xs text-right -mt-2">{missedReason.length}/200</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowMissedModal(false)} className="flex-1 py-3 rounded-xl bg-gray-800 text-gray-300 font-bold text-sm">
+                Cancel
+              </button>
+              <button onClick={() => { markMissed(missedReason); setShowMissedModal(false); }} className="flex-1 py-3 rounded-xl bg-red-700 text-white font-bold text-sm active:scale-95 transition-transform">
+                Save
+              </button>
+            </div>
           </div>
         </>
       )}

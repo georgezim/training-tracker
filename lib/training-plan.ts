@@ -597,3 +597,9 @@ export const COLOR_BORDER: Record<string, string> = {
   gray:   'border-gray-600',
   red:    'border-red-500',
 };
+
+// Workout type helpers for Strava auto-matching
+export function isRunWorkout(type: string) { return type === 'run' || type === 'race'; }
+export function isBikeWorkout(type: string) { return type === 'bike'; }
+export function isGymWorkout(type: string) { return type === 'gym' || type === 'strength'; }
+

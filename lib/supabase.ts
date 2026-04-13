@@ -28,5 +28,7 @@ export interface CompletedSession {
   date: string;
   session_type: SessionType;
   completed: boolean;
+  status: 'done' | 'missed';
+  missed_reason?: string | null;
   created_at: string;
 }

@@ -25,7 +25,6 @@ export default function WeekPage() {
   const todayStr = dateToString(today);
   const [weekOffset, setWeekOffset] = useState(0);
 
-  // Build the anchor date by shifting today by weekOffset weeks
   const anchorDate = new Date(today);
   anchorDate.setDate(today.getDate() + weekOffset * 7);
 
@@ -36,23 +35,71 @@ export default function WeekPage() {
 
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<{ workout: WorkoutInfo; detail: WorkoutDetail; label: string } | null>(null);
 
+  // Status action modal
+  const [statusAction, setStatusAction] = useState<{ dateStr: string; sessionType: string } | null>(null);
+  // Missed reason modal
+  const [missedModal, setMissedModal] = useState<{ dateStr: string; sessionType: string } | null>(null);
+  const [missedReason, setMissedReason] = useState('');
+  // View reason
+  const [viewReason, setViewReason] = useState<{ reason: string } | null>(null);
+
   useEffect(() => {
-    if (days.length === 0) return;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (days.length === 0 || !userId) return;
     setLoading(true);
     const startStr = dateToString(days[0]);
     const endStr = dateToString(days[6]);
     supabase
       .from('completed_sessions')
       .select('*')
+      .eq('user_id', userId)
       .gte('date', startStr)
       .lte('date', endStr)
       .then(({ data }) => {
         if (data) setSessions(data as CompletedSession[]);
         setLoading(false);
       });
-  }, [weekOffset]);
+  }, [weekOffset, userId]);
+
+  function getSession(dateStr: string, sessionType: string) {
+    return sessions.find(s => s.date === dateStr && s.session_type === sessionType) ?? null;
+  }
+
+  async function markDone(dateStr: string, sessionType: string) {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('completed_sessions')
+      .upsert({ user_id: userId, date: dateStr, session_type: sessionType, completed: true, status: 'done' }, { onConflict: 'user_id,date,session_type' })
+      .select().single();
+    if (data) setSessions(prev => [...prev.filter(s => !(s.date === dateStr && s.session_type === sessionType)), data as CompletedSession]);
+  }
+
+  async function markMissed(dateStr: string, sessionType: string, reason: string) {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('completed_sessions')
+      .upsert({ user_id: userId, date: dateStr, session_type: sessionType, completed: false, status: 'missed', missed_reason: reason || null }, { onConflict: 'user_id,date,session_type' })
+      .select().single();
+    if (data) setSessions(prev => [...prev.filter(s => !(s.date === dateStr && s.session_type === sessionType)), data as CompletedSession]);
+    setMissedReason('');
+  }
+
+  async function clearSessionForDay(dateStr: string, sessionType: string) {
+    const existing = sessions.find(s => s.date === dateStr && s.session_type === sessionType);
+    if (!existing) return;
+    await supabase.from('completed_sessions').delete().eq('id', existing.id);
+    setSessions(prev => prev.filter(s => !(s.date === dateStr && s.session_type === sessionType)));
+  }
+
+  const doneSessions = sessions.filter(s => s.status === 'done').length;
 
   return (
     <div className="min-h-screen bg-gray-950" style={{ paddingBottom: '5.5rem' }}>
@@ -123,10 +170,7 @@ export default function WeekPage() {
           const dayStr = dateToString(day);
           const workout = getWorkoutForDate(day);
           const isToday = dayStr === todayStr;
-          const isPast = day.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-          const completed = sessions.some(
-            (s) => s.date === dayStr && s.session_type === workout.type
-          );
+          const session = getSession(dayStr, workout.type);
           const colorStrip = COLOR_BG[workout.color] ?? 'bg-gray-700';
           const colorText = COLOR_TEXT[workout.color] ?? 'text-gray-500';
 
@@ -139,9 +183,7 @@ export default function WeekPage() {
                 label: `${DAY_NAMES[i]} ${day.getDate()} ${day.toLocaleString('default', { month: 'short' })}`,
               })}
               className={`rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer active:scale-[0.98] ${
-                isToday
-                  ? 'bg-gray-800 ring-1 ring-white/20'
-                  : 'bg-gray-900'
+                isToday ? 'bg-gray-800 ring-1 ring-white/20' : 'bg-gray-900'
               }`}
             >
               {/* Day label */}
@@ -169,21 +211,29 @@ export default function WeekPage() {
                 </p>
               </div>
 
-              {/* Status indicator */}
+              {/* Status chip */}
               <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                {isToday && <span className="text-blue-400 text-xs font-bold">NOW</span>}
                 {workout.type !== 'rest' && (
-                  <div
-                    className={`w-3 h-3 rounded-full border ${
-                      completed
-                        ? 'bg-green-500 border-green-400'
-                        : isPast
-                        ? 'bg-gray-700 border-gray-600'
-                        : 'bg-transparent border-gray-600'
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (session?.status === 'missed' && session.missed_reason) {
+                        setViewReason({ reason: session.missed_reason });
+                      } else {
+                        setStatusAction({ dateStr: dayStr, sessionType: workout.type });
+                      }
+                    }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                      session?.status === 'done'
+                        ? 'bg-green-500/25 text-green-400'
+                        : session?.status === 'missed'
+                        ? 'bg-red-500/25 text-red-400'
+                        : 'bg-gray-800 text-gray-600 border border-gray-700'
                     }`}
-                  />
-                )}
-                {isToday && (
-                  <span className="text-blue-400 text-xs font-bold">NOW</span>
+                  >
+                    {session?.status === 'done' ? '✓' : session?.status === 'missed' ? '✗' : '·'}
+                  </button>
                 )}
               </div>
             </div>
@@ -196,7 +246,7 @@ export default function WeekPage() {
             <div className="flex items-center justify-between">
               <p className="text-gray-400 text-sm">Sessions completed</p>
               <p className="text-white font-bold text-sm">
-                {sessions.length} /{' '}
+                {doneSessions} /{' '}
                 {days.filter((d) => getWorkoutForDate(d).type !== 'rest').length}
               </p>
             </div>
@@ -213,6 +263,92 @@ export default function WeekPage() {
           dateLabel={selectedDay.label}
           onClose={() => setSelectedDay(null)}
         />
+      )}
+
+      {/* Status action modal */}
+      {statusAction && (() => {
+        const existing = getSession(statusAction.dateStr, statusAction.sessionType);
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setStatusAction(null)} />
+            <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-2"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-white font-bold text-base mb-3">Mark this session</h3>
+              <button
+                onClick={() => { markDone(statusAction.dateStr, statusAction.sessionType); setStatusAction(null); }}
+                className="w-full py-3 rounded-xl bg-green-700/40 text-green-300 font-bold text-sm active:scale-95 transition-transform"
+              >
+                ✓ Done
+              </button>
+              <button
+                onClick={() => { setMissedModal(statusAction); setMissedReason(existing?.missed_reason ?? ''); setStatusAction(null); }}
+                className="w-full py-3 rounded-xl bg-red-700/30 text-red-300 font-bold text-sm active:scale-95 transition-transform"
+              >
+                ✗ Didn't Do
+              </button>
+              {existing && (
+                <button
+                  onClick={() => { clearSessionForDay(statusAction.dateStr, statusAction.sessionType); setStatusAction(null); }}
+                  className="w-full py-3 rounded-xl bg-gray-800 text-gray-400 text-sm active:scale-95 transition-transform"
+                >
+                  Clear
+                </button>
+              )}
+              <button onClick={() => setStatusAction(null)} className="w-full py-2 text-gray-600 text-sm">
+                Cancel
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* Missed reason modal */}
+      {missedModal && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setMissedModal(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-4"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-bold text-lg">Why did you miss it?</h3>
+            <textarea
+              value={missedReason}
+              onChange={e => setMissedReason(e.target.value.slice(0, 200))}
+              rows={3}
+              placeholder="Feeling tired, work got busy, minor pain…"
+              autoFocus
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-red-500 resize-none transition-colors"
+            />
+            <p className="text-gray-600 text-xs text-right -mt-2">{missedReason.length}/200</p>
+            <div className="flex gap-3">
+              <button onClick={() => setMissedModal(null)} className="flex-1 py-3 rounded-xl bg-gray-800 text-gray-300 font-bold text-sm">
+                Cancel
+              </button>
+              <button
+                onClick={() => { markMissed(missedModal.dateStr, missedModal.sessionType, missedReason); setMissedModal(null); }}
+                className="flex-1 py-3 rounded-xl bg-red-700 text-white font-bold text-sm active:scale-95 transition-transform"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* View missed reason */}
+      {viewReason && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setViewReason(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-3"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-bold text-base">Reason for missing</h3>
+            <p className="text-gray-300 text-sm leading-relaxed">{viewReason.reason}</p>
+            <button onClick={() => setViewReason(null)} className="w-full py-3 rounded-xl bg-gray-800 text-gray-300 font-bold text-sm">
+              Close
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
