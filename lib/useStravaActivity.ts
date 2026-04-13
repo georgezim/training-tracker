@@ -18,21 +18,31 @@ export interface CachedActivity {
 
 export function useStravaActivity(date: string) {
   const [activity, setActivity] = useState<CachedActivity | null>(null);
-  const [connected, setConnected] = useState<boolean | null>(null); // null = loading
+  const [connected, setConnected] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/strava/activities?date=${date}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setConnected(data.connected);
-        if (data.activities?.length > 0) {
-          // Pick the first run/ride/gym activity for this date
-          setActivity(data.activities[0]);
+    async function load() {
+      try {
+        // Check connection via server route (bypasses RLS)
+        const statusRes = await fetch('/api/strava/status');
+        const { connected: isConnected } = await statusRes.json();
+        setConnected(isConnected);
+
+        if (isConnected) {
+          const actRes = await fetch(`/api/strava/activities?date=${date}`);
+          const data = await actRes.json();
+          if (data.activities?.length > 0) {
+            setActivity(data.activities[0]);
+          }
         }
-      })
-      .catch(() => setConnected(false))
-      .finally(() => setLoading(false));
+      } catch {
+        setConnected(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, [date]);
 
   return { activity, connected, loading };

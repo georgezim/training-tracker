@@ -58,11 +58,11 @@ export default function SessionsPage() {
 
   useEffect(() => {
     async function init() {
-      const { data: tokenData } = await supabase.from('strava_tokens').select('id').eq('id', 1).maybeSingle();
-      const isConnected = !!tokenData;
+      const res = await fetch('/api/strava/status');
+      const { connected: isConnected, activityCount } = await res.json();
       setConnected(isConnected);
 
-      if (isConnected) {
+      if (isConnected && activityCount > 0) {
         await loadFromCache();
       }
       setLoading(false);
