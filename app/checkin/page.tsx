@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { supabase, DailyCheckin, FeelingType } from '@/lib/supabase';
-import { dateToString } from '@/lib/training-plan';
+import { dateToString, getWorkoutForDate } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 
 const FEELING_OPTIONS: { value: FeelingType; label: string; emoji: string; cls: string }[] = [
@@ -106,7 +106,11 @@ export default function CheckinPage() {
     e.preventDefault();
     setSaving(true);
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+
     const payload = {
+      user_id: user.id,
       date: todayStr,
       whoop_recovery: whoop,
       sleep_score: sleep,
@@ -115,15 +119,31 @@ export default function CheckinPage() {
       notes: notes.trim() || null,
     };
 
+    let savedCheckin: DailyCheckin | null = null;
     if (existing) {
       await supabase.from('daily_checkins').update(payload).eq('id', existing.id);
+      savedCheckin = { ...existing, ...payload };
     } else {
       const { data } = await supabase
         .from('daily_checkins')
-        .insert(payload)
+        .upsert(payload, { onConflict: 'user_id,date' })
         .select()
         .single();
-      if (data) setExisting(data as DailyCheckin);
+      if (data) { savedCheckin = data as DailyCheckin; setExisting(savedCheckin); }
+    }
+
+    // Trigger AI coach in background after check-in
+    if (savedCheckin) {
+      const workout = getWorkoutForDate(new Date());
+      fetch('/api/ai-coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plannedWorkout: workout, checkin: savedCheckin }),
+      }).then(r => r.json()).then(coach => {
+        if (coach.title) {
+          localStorage.setItem('ai_coach_today', JSON.stringify({ ...coach, date: todayStr }));
+        }
+      }).catch(() => {});
     }
 
     setSaving(false);

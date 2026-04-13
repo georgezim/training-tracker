@@ -14,6 +14,7 @@ import {
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import StravaActivityCard from '@/components/StravaActivityCard';
+import AiCoachCard from '@/components/AiCoachCard';
 import { useStravaActivity } from '@/lib/useStravaActivity';
 
 const FEELING_EMOJI: Record<string, string> = {
@@ -117,6 +118,18 @@ export default function TodayPage() {
     if (status) window.history.replaceState({}, '', '/');
   }, []);
 
+  // AI Coach
+  const [aiCoach, setAiCoach] = useState<{ title: string; description: string } | null>(null);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('ai_coach_today');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.date === todayStr) setAiCoach(parsed);
+      }
+    } catch {}
+  }, [todayStr]);
+
   // Races
   const [races, setRaces] = useState<UserRace[]>(DEFAULT_RACES);
   const [editingRaces, setEditingRaces] = useState(false);
@@ -159,13 +172,15 @@ export default function TodayPage() {
   async function toggleSession() {
     if (toggling || workout.type === 'rest') return;
     setToggling(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setToggling(false); return; }
     if (session) {
       await supabase.from('completed_sessions').delete().eq('id', session.id);
       setSession(null);
     } else {
       const { data } = await supabase
         .from('completed_sessions')
-        .upsert({ date: todayStr, session_type: workout.type, completed: true }, { onConflict: 'date,session_type' })
+        .upsert({ user_id: user.id, date: todayStr, session_type: workout.type, completed: true }, { onConflict: 'user_id,date,session_type' })
         .select()
         .single();
       if (data) setSession(data as CompletedSession);
@@ -190,6 +205,9 @@ export default function TodayPage() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <h1 className="text-white text-xl font-bold tracking-tight">Training Tracker</h1>
+            <form action="/api/auth/logout" method="POST">
+              <button type="submit" className="text-gray-500 text-xs px-2 py-1 hover:text-gray-300">Sign out</button>
+            </form>
             {week > 0 && week <= 31 && (
               <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
                 W{week} / 31
@@ -279,6 +297,17 @@ export default function TodayPage() {
               Keep today easy. Focus on sleep and nutrition tonight.
             </p>
           </div>
+        )}
+
+        {/* ── AI Coach ── */}
+        {aiCoach && (
+          <AiCoachCard
+            coach={aiCoach}
+            onDismiss={() => {
+              setAiCoach(null);
+              localStorage.removeItem('ai_coach_today');
+            }}
+          />
         )}
 
         {/* ── Strava status message ── */}

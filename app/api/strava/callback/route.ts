@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthUserId } from '@/lib/api-auth';
 
-// Use service role key to bypass RLS on server-side writes
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -17,7 +17,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${appUrl}/?strava=denied`);
   }
 
-  // Exchange code for tokens
+  const userId = await getAuthUserId();
+  if (!userId) {
+    return NextResponse.redirect(`${appUrl}/login`);
+  }
+
   const tokenRes = await fetch('https://www.strava.com/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -30,21 +34,19 @@ export async function GET(req: NextRequest) {
   });
 
   const tokenBody = await tokenRes.json();
-
   if (!tokenRes.ok) {
     const errMsg = encodeURIComponent(JSON.stringify(tokenBody));
     return NextResponse.redirect(`${appUrl}/?strava=error&detail=${errMsg}`);
   }
 
-  // Store tokens in Supabase (upsert single row with id=1)
   const { error: dbError } = await supabase.from('strava_tokens').upsert({
-    id: 1,
+    user_id: userId,
     athlete_id: tokenBody.athlete.id,
     access_token: tokenBody.access_token,
     refresh_token: tokenBody.refresh_token,
     expires_at: tokenBody.expires_at,
     updated_at: new Date().toISOString(),
-  });
+  }, { onConflict: 'user_id' });
 
   if (dbError) {
     const errMsg = encodeURIComponent(dbError.message);

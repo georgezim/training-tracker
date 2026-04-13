@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,6 +12,7 @@ export type SessionType = 'run' | 'gym' | 'bike' | 'race';
 
 export interface DailyCheckin {
   id: string;
+  user_id: string;
   date: string;
   whoop_recovery: number | null;
   sleep_score: number | null;
@@ -23,6 +24,7 @@ export interface DailyCheckin {
 
 export interface CompletedSession {
   id: string;
+  user_id: string;
   date: string;
   session_type: SessionType;
   completed: boolean;
