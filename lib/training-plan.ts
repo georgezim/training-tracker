@@ -16,9 +16,9 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d);
 }
 
-// Plan anchor = Monday April 14, 2026 (as local midnight)
+// Plan anchor = Monday April 13, 2026 (as local midnight)
 function planStart(): Date {
-  return new Date(2026, 3, 14); // month is 0-indexed
+  return new Date(2026, 3, 13); // month is 0-indexed
 }
 
 // ─── Phase & Week helpers ─────────────────────────────────────────────────────
@@ -204,7 +204,7 @@ export function getWorkoutForDate(date: Date): WorkoutInfo {
   const day = getPlanDayIndex(date); // 0=Mon … 6=Sun
 
   if (week <= 0) {
-    return { type: 'rest', label: 'Pre-Plan', description: 'Plan starts Monday April 14, 2026', color: 'gray' };
+    return { type: 'rest', label: 'Pre-Plan', description: 'Plan starts Monday April 13, 2026', color: 'gray' };
   }
   if (week > 31) {
     return { type: 'rest', label: 'Post-Marathon', description: '🎉 You did it! Marathon complete. Rest and recover.', color: 'gray' };
@@ -322,8 +322,8 @@ export function getWorkoutDetail(date: Date): WorkoutDetail {
     return {
       duration: '—',
       intensity: 'Pre-plan rest',
-      steps: [{ icon: '📅', title: 'Plan starts April 14', detail: 'Use this time to prepare gear, plan your nutrition, and get good sleep.' }],
-      keyPoints: ['Plan starts Monday April 14, 2026'],
+      steps: [{ icon: '📅', title: 'Plan starts April 13', detail: 'Use this time to prepare gear, plan your nutrition, and get good sleep.' }],
+      keyPoints: ['Plan starts Monday April 13, 2026'],
     };
   }
 

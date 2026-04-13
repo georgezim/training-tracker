@@ -8,7 +8,6 @@ import {
   getWeekNumber,
   getPhase,
   PHASE_NAMES,
-  getNextRace,
   dateToString,
   COLOR_BG,
 } from '@/lib/training-plan';
@@ -68,6 +67,24 @@ function achillesTier(v: number | null): 'green' | 'yellow' | 'red' | 'gray' {
   return 'red';
 }
 
+interface UserRace { id: string; name: string; date: string; distance: string; emoji: string; }
+const DEFAULT_RACES: UserRace[] = [
+  { id: '1', name: '10K Race', date: '2026-06-23', distance: '10K', emoji: '🏅' },
+  { id: '2', name: 'Ioannina 30K', date: '2026-09-11', distance: '30K', emoji: '🏔️' },
+  { id: '3', name: 'Athens Marathon', date: '2026-11-15', distance: '42.2K', emoji: '🏆' },
+];
+function loadRaces(): UserRace[] {
+  if (typeof window === 'undefined') return DEFAULT_RACES;
+  try { const s = localStorage.getItem('user_races'); return s ? JSON.parse(s) : DEFAULT_RACES; }
+  catch { return DEFAULT_RACES; }
+}
+function saveRaces(r: UserRace[]) { localStorage.setItem('user_races', JSON.stringify(r)); }
+function daysUntil(dateStr: string, today: Date): number {
+  const d = new Date(dateStr + 'T00:00:00');
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.floor((d.getTime() - t.getTime()) / (24 * 60 * 60 * 1000));
+}
+
 export default function TodayPage() {
   const today = new Date();
   const todayStr = dateToString(today);
@@ -75,7 +92,6 @@ export default function TodayPage() {
   const workout = getWorkoutForDate(today);
   const week = getWeekNumber(today);
   const phase = getPhase(week);
-  const nextRace = getNextRace(today);
 
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [session, setSession] = useState<CompletedSession | null>(null);
@@ -83,6 +99,32 @@ export default function TodayPage() {
   const [toggling, setToggling] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
+
+  // Races
+  const [races, setRaces] = useState<UserRace[]>(DEFAULT_RACES);
+  const [editingRaces, setEditingRaces] = useState(false);
+  const [editRaces, setEditRaces] = useState<UserRace[]>(DEFAULT_RACES);
+
+  useEffect(() => { setRaces(loadRaces()); }, []);
+
+  function openRaceEditor() { setEditRaces([...races]); setEditingRaces(true); }
+  function saveRaceEdits() {
+    const valid = editRaces.filter(r => r.name && r.date);
+    setRaces(valid); saveRaces(valid); setEditingRaces(false);
+  }
+  function updateEditRace(id: string, field: keyof UserRace, value: string) {
+    setEditRaces(r => r.map(race => race.id === id ? { ...race, [field]: value } : race));
+  }
+  function addRace() {
+    if (editRaces.length >= 3) return;
+    setEditRaces(r => [...r, { id: Date.now().toString(), name: '', date: '', distance: '', emoji: '🏅' }]);
+  }
+  function removeRace(id: string) { setEditRaces(r => r.filter(race => race.id !== id)); }
+
+  const upcomingRaces = races
+    .map(r => ({ ...r, daysLeft: daysUntil(r.date, today) }))
+    .filter(r => r.daysLeft >= 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
 
   useEffect(() => {
     async function load() {
@@ -140,21 +182,24 @@ export default function TodayPage() {
           {week > 0 && week <= 31 && (
             <p className="text-blue-300/80 text-sm mt-0.5">{PHASE_NAMES[phase]}</p>
           )}
-          {nextRace && (
-            <div className="mt-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-2">
-              <span className="text-lg">{nextRace.race.emoji}</span>
-              <div>
-                <p className="text-white text-sm font-semibold leading-tight">{nextRace.race.name}</p>
-                <p className="text-blue-300 text-xs">
-                  {nextRace.daysUntil === 0
-                    ? 'TODAY — Race day!'
-                    : nextRace.daysUntil === 1
-                    ? 'Tomorrow!'
-                    : `${nextRace.daysUntil} days away`}
-                </p>
+          {/* Races */}
+          <div className="mt-3 space-y-2">
+            {upcomingRaces.slice(0, 3).map(r => (
+              <div key={r.id} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                <span className="text-lg">{r.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-semibold leading-tight truncate">{r.name}</p>
+                  <p className="text-blue-300 text-xs">
+                    {r.daysLeft === 0 ? 'TODAY — Race day!' : r.daysLeft === 1 ? 'Tomorrow!' : `${r.daysLeft} days away`}
+                    {r.distance ? ` · ${r.distance}` : ''}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            ))}
+            <button onClick={openRaceEditor} className="text-blue-400/60 text-xs w-full text-center py-1">
+              Edit races ✏️
+            </button>
+          </div>
         </div>
       </header>
 
@@ -294,6 +339,64 @@ export default function TodayPage() {
           dateLabel={dateLabel}
           onClose={() => setShowDetail(false)}
         />
+      )}
+
+      {/* Race editor modal */}
+      {editingRaces && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setEditingRaces(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-4"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">Your Races</h3>
+              <button onClick={() => setEditingRaces(false)} className="text-gray-500 text-2xl">×</button>
+            </div>
+            <p className="text-gray-500 text-xs">Up to 3 races. Tap a field to edit.</p>
+            <div className="space-y-3">
+              {editRaces.map((r) => (
+                <div key={r.id} className="bg-gray-800 rounded-xl p-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={r.emoji}
+                      onChange={e => updateEditRace(r.id, 'emoji', e.target.value)}
+                      className="w-10 bg-gray-700 rounded-lg px-2 py-1.5 text-white text-sm text-center"
+                      maxLength={2}
+                    />
+                    <input
+                      value={r.name}
+                      onChange={e => updateEditRace(r.id, 'name', e.target.value)}
+                      placeholder="Race name"
+                      className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-500"
+                    />
+                    <button onClick={() => removeRace(r.id)} className="text-red-400 text-lg px-1">×</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={r.date}
+                      onChange={e => updateEditRace(r.id, 'date', e.target.value)}
+                      className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm"
+                    />
+                    <input
+                      value={r.distance}
+                      onChange={e => updateEditRace(r.id, 'distance', e.target.value)}
+                      placeholder="Distance"
+                      className="w-20 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-500"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {editRaces.length < 3 && (
+              <button onClick={addRace} className="w-full py-2 rounded-xl border border-dashed border-gray-700 text-gray-500 text-sm">
+                + Add race
+              </button>
+            )}
+            <button onClick={saveRaceEdits} className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">
+              Save
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
