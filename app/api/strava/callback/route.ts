@@ -28,21 +28,27 @@ export async function GET(req: NextRequest) {
     }),
   });
 
+  const tokenBody = await tokenRes.json();
+
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${appUrl}/?strava=error`);
+    const errMsg = encodeURIComponent(JSON.stringify(tokenBody));
+    return NextResponse.redirect(`${appUrl}/?strava=error&detail=${errMsg}`);
   }
 
-  const token = await tokenRes.json();
-
   // Store tokens in Supabase (upsert single row with id=1)
-  await supabase.from('strava_tokens').upsert({
+  const { error: dbError } = await supabase.from('strava_tokens').upsert({
     id: 1,
-    athlete_id: token.athlete.id,
-    access_token: token.access_token,
-    refresh_token: token.refresh_token,
-    expires_at: token.expires_at,
+    athlete_id: tokenBody.athlete.id,
+    access_token: tokenBody.access_token,
+    refresh_token: tokenBody.refresh_token,
+    expires_at: tokenBody.expires_at,
     updated_at: new Date().toISOString(),
   });
+
+  if (dbError) {
+    const errMsg = encodeURIComponent(dbError.message);
+    return NextResponse.redirect(`${appUrl}/?strava=dberror&detail=${errMsg}`);
+  }
 
   return NextResponse.redirect(`${appUrl}/?strava=connected`);
 }

@@ -100,6 +100,23 @@ export default function TodayPage() {
   const [showDetail, setShowDetail] = useState(false);
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
+  // Read Strava OAuth result from URL params
+  const [stravaMsg, setStravaMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('strava');
+    const detail = params.get('detail');
+    if (status === 'connected') {
+      setStravaMsg({ type: 'success', text: 'Strava connected! Go to Sessions tab and tap Sync to import your history.' });
+    } else if (status === 'error' || status === 'dberror') {
+      setStravaMsg({ type: 'error', text: `Connection failed: ${detail ? decodeURIComponent(detail) : status}` });
+    } else if (status === 'denied') {
+      setStravaMsg({ type: 'error', text: 'Strava authorization was denied.' });
+    }
+    // Clean up URL
+    if (status) window.history.replaceState({}, '', '/');
+  }, []);
+
   // Races
   const [races, setRaces] = useState<UserRace[]>(DEFAULT_RACES);
   const [editingRaces, setEditingRaces] = useState(false);
@@ -261,6 +278,17 @@ export default function TodayPage() {
             <p className="text-yellow-200/80 text-xs mt-1">
               Keep today easy. Focus on sleep and nutrition tonight.
             </p>
+          </div>
+        )}
+
+        {/* ── Strava status message ── */}
+        {stravaMsg && (
+          <div className={`rounded-xl px-4 py-3 text-sm font-medium ${
+            stravaMsg.type === 'success'
+              ? 'bg-green-950 border border-green-700/60 text-green-300'
+              : 'bg-red-950 border border-red-700/60 text-red-300'
+          }`}>
+            {stravaMsg.text}
           </div>
         )}
 
