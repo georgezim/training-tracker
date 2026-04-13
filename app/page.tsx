@@ -69,13 +69,6 @@ function achillesTier(v: number | null): 'green' | 'yellow' | 'red' | 'gray' {
 }
 
 interface UserRace { id: string; name: string; date: string; distance: string; emoji: string; }
-function racesKey(userId: string) { return `user_races_${userId}`; }
-function loadRaces(userId: string): UserRace[] {
-  if (typeof window === 'undefined') return [];
-  try { const s = localStorage.getItem(racesKey(userId)); return s ? JSON.parse(s) : []; }
-  catch { return []; }
-}
-function saveRaces(userId: string, r: UserRace[]) { localStorage.setItem(racesKey(userId), JSON.stringify(r)); }
 function daysUntil(dateStr: string, today: Date): number {
   const d = new Date(dateStr + 'T00:00:00');
   const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -133,10 +126,12 @@ export default function TodayPage() {
   const [editRaces, setEditRaces] = useState<UserRace[]>([]);
 
   function openRaceEditor() { setEditRaces([...races]); setEditingRaces(true); }
-  function saveRaceEdits() {
+  async function saveRaceEdits() {
     if (!userId) return;
     const valid = editRaces.filter(r => r.name && r.date);
-    setRaces(valid); saveRaces(userId, valid); setEditingRaces(false);
+    setRaces(valid);
+    setEditingRaces(false);
+    await supabase.from('profiles').update({ races: valid }).eq('id', userId);
   }
   function updateEditRace(id: string, field: keyof UserRace, value: string) {
     setEditRaces(r => r.map(race => race.id === id ? { ...race, [field]: value } : race));
@@ -157,14 +152,15 @@ export default function TodayPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      const [{ data: ci }, { data: se }] = await Promise.all([
+      const [{ data: ci }, { data: se }, { data: profile }] = await Promise.all([
         supabase.from('daily_checkins').select('*').eq('user_id', user.id).eq('date', todayStr).maybeSingle(),
         supabase.from('completed_sessions').select('*').eq('user_id', user.id).eq('date', todayStr).eq('session_type', workout.type).maybeSingle(),
+        supabase.from('profiles').select('races').eq('id', user.id).maybeSingle(),
       ]);
       setUserId(user.id);
       setCheckin(ci ?? null);
       setSession(se ?? null);
-      setRaces(loadRaces(user.id));
+      setRaces(profile?.races ?? []);
       setLoading(false);
     }
     load();
