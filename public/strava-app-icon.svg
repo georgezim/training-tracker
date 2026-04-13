@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="40" fill="#1B2A4A"/>
+  <!-- Runner figure -->
+  <!-- Head -->
+  <circle cx="115" cy="48" r="14" fill="#60A5FA"/>
+  <!-- Body -->
+  <line x1="115" y1="62" x2="105" y2="105" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+  <!-- Left arm (forward) -->
+  <line x1="112" y1="75" x2="85" y2="88" stroke="#60A5FA" stroke-width="7" stroke-linecap="round"/>
+  <!-- Right arm (back) -->
+  <line x1="108" y1="78" x2="132" y2="95" stroke="#60A5FA" stroke-width="7" stroke-linecap="round"/>
+  <!-- Left leg (forward stride) -->
+  <line x1="105" y1="105" x2="80" y2="135" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+  <line x1="80" y1="135" x2="72" y2="158" stroke="#60A5FA" stroke-width="7" stroke-linecap="round"/>
+  <!-- Right leg (back push) -->
+  <line x1="105" y1="105" x2="128" y2="128" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+  <line x1="128" y1="128" x2="148" y2="148" stroke="#60A5FA" stroke-width="7" stroke-linecap="round"/>
+  <!-- Ground line -->
+  <line x1="40" y1="162" x2="165" y2="162" stroke="#3B5280" stroke-width="3" stroke-linecap="round"/>
+</svg>
