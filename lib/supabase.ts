@@ -16,10 +16,30 @@ export interface DailyCheckin {
   date: string;
   whoop_recovery: number | null;
   sleep_score: number | null;
+  sleep_hours: number | null;
   achilles_pain: number | null;
   feeling: FeelingType | null;
   notes: string | null;
   created_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string | null;
+  goal: string | null;
+  goal_other: string | null;
+  training_level: string | null;
+  days_per_week: number | null;
+  age: number | null;
+  current_activity: string | null;
+  equipment: string[] | null;
+  injury_notes: string | null;
+  preferred_long_day: string | null;
+  has_sleep_tracker: boolean;
+  sleep_device: string | null;
+  races: { id: string; name: string; date: string; distance: string; emoji: string }[] | null;
+  plan_start: string | null;
+  target_race: string | null;
 }
 
 export interface CompletedSession {

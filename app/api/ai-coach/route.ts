@@ -40,15 +40,19 @@ export async function POST(req: NextRequest) {
   const prompt = `You are a personal running coach. Adapt today's planned workout based on this athlete's data. Be concise and specific.
 
 ATHLETE:
-- Goal: ${profile?.goal ?? 'marathon'}
+- Goal: ${profile?.goal_other ?? profile?.goal ?? 'marathon'}
 - Level: ${profile?.training_level ?? 'intermediate'}
+- Training days/week: ${profile?.days_per_week ?? 4}
+- Age: ${profile?.age ?? 'unknown'}
+- Injuries/limitations: ${profile?.injury_notes ?? 'none'}
 
 TODAY'S PLAN:
 ${plannedWorkout.label}: ${plannedWorkout.description}
 
 TODAY'S BODY DATA:
-- Whoop Recovery: ${checkin.whoop_recovery ?? 'not logged'}%
-- Sleep Score: ${checkin.sleep_score ?? 'not logged'}%
+${checkin.whoop_recovery != null ? `- Recovery Score: ${checkin.whoop_recovery}%` : ''}
+${checkin.sleep_score != null ? `- Sleep Score: ${checkin.sleep_score}%` : ''}
+${checkin.sleep_hours != null ? `- Hours Slept: ${checkin.sleep_hours}h` : ''}
 - Achilles Pain: ${checkin.achilles_pain ?? 0}/10
 - Feeling: ${checkin.feeling ?? 'not logged'}
 - Notes: ${checkin.notes || 'none'}
@@ -57,10 +61,10 @@ LAST 7 DAYS:
 ${recentSummary}
 
 RULES:
-- Recovery ≥70%: do the planned workout as-is or slightly harder
-- Recovery 33-69%: reduce intensity or volume ~20%, keep session type
-- Recovery <33%: switch to easy bike or complete rest
-- Achilles pain ≥4: no running at all, suggest bike or strength upper body only
+- High recovery (score ≥70% or sleep ≥7.5h, feeling great/good): do planned workout as-is or slightly harder
+- Medium recovery (score 33-69% or sleep 6-7.5h, feeling tired): reduce intensity or volume ~20%
+- Low recovery (score <33% or sleep <6h, feeling bad): switch to easy bike or complete rest
+- Achilles pain ≥4: no running at all, suggest bike or upper body strength only
 
 Reply in exactly this format (3 lines, no extra text):
 LINE 1: Short adapted workout title (e.g. "Easy 6km Run" or "Rest — swap to bike")

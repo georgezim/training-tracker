@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase, DailyCheckin, CompletedSession } from '@/lib/supabase';
+import { supabase, DailyCheckin, CompletedSession, UserProfile } from '@/lib/supabase';
+import CheckinModal from '@/components/CheckinModal';
 import {
   getWorkoutForDate,
   getWorkoutDetail,
@@ -89,8 +90,10 @@ export default function TodayPage() {
   const [toggling, setToggling] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showMissedModal, setShowMissedModal] = useState(false);
   const [missedReason, setMissedReason] = useState('');
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   // Read Strava OAuth result from URL params
@@ -154,15 +157,26 @@ export default function TodayPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      const [{ data: ci }, { data: se }, { data: profile }] = await Promise.all([
+      const [{ data: ci }, { data: se }, { data: prof }] = await Promise.all([
         supabase.from('daily_checkins').select('*').eq('user_id', user.id).eq('date', todayStr).maybeSingle(),
         supabase.from('completed_sessions').select('*').eq('user_id', user.id).eq('date', todayStr).eq('session_type', workout.type).maybeSingle(),
-        supabase.from('profiles').select('races').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
       ]);
       setUserId(user.id);
       setCheckin(ci ?? null);
       setSession(se ?? null);
-      setRaces(profile?.races ?? []);
+      if (prof) setProfile(prof as UserProfile);
+      setRaces((prof as UserProfile | null)?.races ?? []);
+
+      // Show checkin popup after 5am if not yet checked in
+      if (!ci) {
+        const hour = new Date().getHours();
+        const promptKey = `checkin_prompted_${todayStr}`;
+        if (hour >= 5 && !localStorage.getItem(promptKey)) {
+          localStorage.setItem(promptKey, '1');
+          setShowCheckinModal(true);
+        }
+      }
       setLoading(false);
     }
     load();
@@ -251,7 +265,22 @@ export default function TodayPage() {
       </header>
 
       <main className="max-w-md mx-auto px-4 pt-5 space-y-4">
-        <p className="text-gray-500 text-sm">{dateLabel}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-gray-500 text-sm">{dateLabel}</p>
+          {/* Checkin status */}
+          {checkin ? (
+            <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-900/30 px-3 py-1.5 rounded-full font-medium">
+              ✓ Checked in
+            </span>
+          ) : (
+            <button
+              onClick={() => setShowCheckinModal(true)}
+              className="flex items-center gap-1.5 text-xs text-orange-300 bg-orange-900/30 px-3 py-1.5 rounded-full font-medium active:scale-95 transition-transform"
+            >
+              📋 Check in
+            </button>
+          )}
+        </div>
 
         {/* ── Workout Card ── */}
         <div
@@ -311,6 +340,16 @@ export default function TodayPage() {
             )}
           </div>
         </div>
+
+        {/* ── Goal-based plan notice for non-marathon users ── */}
+        {profile && profile.goal && !['marathon', 'half_marathon'].includes(profile.goal) && (
+          <div className="bg-blue-950/50 border border-blue-800/40 rounded-xl px-4 py-3">
+            <p className="text-blue-300 text-sm font-semibold">✦ Your personalised plan is being built</p>
+            <p className="text-blue-200/60 text-xs mt-1">
+              Based on your goal ({profile.goal_other ?? profile.goal?.replace('_', ' ')}) and {profile.days_per_week ?? 4} days/week, your AI coach will adapt each session daily after your check-in.
+            </p>
+          </div>
+        )}
 
         {/* ── Warnings ── */}
         {checkin?.achilles_pain != null && checkin.achilles_pain > 3 && (
@@ -440,6 +479,17 @@ export default function TodayPage() {
           detail={getWorkoutDetail(today)}
           dateLabel={dateLabel}
           onClose={() => setShowDetail(false)}
+        />
+      )}
+
+      {/* Daily checkin popup */}
+      {showCheckinModal && userId && (
+        <CheckinModal
+          profile={profile}
+          userId={userId}
+          todayStr={todayStr}
+          onSave={(saved) => { setCheckin(saved); setShowCheckinModal(false); }}
+          onDismiss={() => setShowCheckinModal(false)}
         />
       )}
 

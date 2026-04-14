@@ -28,6 +28,14 @@ const ACTIVITY = [
   { value: 'very_active',label: 'Regularly active',   sub: 'Consistent workouts' },
 ];
 
+const SLEEP_DEVICES = [
+  { value: 'whoop',        label: '💚 Whoop' },
+  { value: 'garmin',       label: '⌚ Garmin' },
+  { value: 'apple_watch',  label: '🍎 Apple Watch' },
+  { value: 'other',        label: '📱 Other tracker' },
+  { value: 'none',         label: '🚫 No tracker' },
+];
+
 const EQUIPMENT = [
   { value: 'outdoor_running', label: '🏃 Running outdoors' },
   { value: 'gym',             label: '🏋️ Gym' },
@@ -66,6 +74,7 @@ export default function SignupPage() {
   const [level, setLevel]           = useState('intermediate');
   const [age, setAge]               = useState('');
   const [currentActivity, setCurrentActivity] = useState('active');
+  const [sleepDevice, setSleepDevice] = useState('none');
 
   // Step 4 — setup
   const [equipment, setEquipment]   = useState<string[]>(['outdoor_running']);
@@ -124,6 +133,8 @@ export default function SignupPage() {
         equipment:          equipment,
         injury_notes:       injuryNotes || null,
         preferred_long_day: preferredDay,
+        sleep_device:       sleepDevice,
+        has_sleep_tracker:  sleepDevice !== 'none',
       });
     }
 
@@ -303,6 +314,28 @@ export default function SignupPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="text-gray-400 text-xs font-medium block mb-2">Do you use a sleep / fitness tracker?</label>
+            <div className="grid grid-cols-2 gap-2">
+              {SLEEP_DEVICES.map(d => (
+                <button
+                  key={d.value} type="button" onClick={() => setSleepDevice(d.value)}
+                  className={`py-3 px-3 rounded-xl text-sm font-medium text-left transition-colors ${
+                    sleepDevice === d.value ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 border border-gray-800'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            {sleepDevice !== 'none' && (
+              <p className="text-blue-400/70 text-xs mt-1.5">Great — your check-ins will include recovery & sleep scores.</p>
+            )}
+            {sleepDevice === 'none' && (
+              <p className="text-gray-500 text-xs mt-1.5">No problem — check-ins will ask how you feel and hours slept.</p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-1">
