@@ -54,16 +54,41 @@ export async function POST(req: NextRequest) {
     : 'No sessions tracked this week.';
 
   const goalLabel = profile?.goal_other ?? profile?.goal ?? 'general fitness';
+  const preferredActivities: string[] = Array.isArray(profile?.preferred_activities) && profile.preferred_activities.length > 0
+    ? profile.preferred_activities
+    : ['run'];
 
-  const prompt = `You are a personal running coach. Adapt today's planned workout based on this athlete's data. Be concise and specific.
+  const canRun   = preferredActivities.includes('run');
+  const canGym   = preferredActivities.includes('gym');
+  const canBike  = preferredActivities.includes('bike');
+  const canSwim  = preferredActivities.includes('swim');
+
+  // Build a strict forbidden list so the coach never suggests disallowed activities
+  const forbidden: string[] = [];
+  if (!canRun)  forbidden.push('running or any running-based exercise');
+  if (!canGym)  forbidden.push('gym machines, weights, or strength exercises');
+  if (!canBike) forbidden.push('cycling or bike sessions');
+  if (!canSwim) forbidden.push('swimming');
+
+  const forbiddenNote = forbidden.length > 0
+    ? `\n⛔ FORBIDDEN — this athlete does NOT do: ${forbidden.join('; ')}. Never suggest these.`
+    : '';
+
+  // Low-recovery fallback must also respect preferred activities
+  const lowRecoveryAlternative = canSwim ? 'easy swim' : canBike ? 'easy bike' : canGym ? 'light stretching/mobility' : 'complete rest';
+  const achillesAlternative = canBike ? 'bike' : canSwim ? 'swim' : 'upper body only';
+
+  const prompt = `You are a personal fitness coach. Adapt today's planned workout based on this athlete's recovery data and preferences. Be concise and specific.
 
 ATHLETE:
 - Goal: ${goalLabel}
+- Preferred activities: ${preferredActivities.join(', ')}
 - Level: ${profile?.training_level ?? 'intermediate'}
 - Training days/week: ${profile?.days_per_week ?? 4}
 - Age: ${profile?.age ?? 'unknown'}
 - Injuries/limitations: ${profile?.injury_notes ?? 'none'}
 ${profile?.race_date ? `- Race date: ${profile.race_date}` : ''}
+${forbiddenNote}
 
 TODAY'S PLAN:
 ${plannedWorkout.label}: ${plannedWorkout.description}
@@ -72,7 +97,7 @@ TODAY'S BODY DATA:
 ${checkin.whoop_recovery != null ? `- Recovery Score: ${checkin.whoop_recovery}%` : ''}
 ${checkin.sleep_score != null ? `- Sleep Score: ${checkin.sleep_score}%` : ''}
 ${checkin.sleep_hours != null ? `- Hours Slept: ${checkin.sleep_hours}h` : ''}
-- Achilles Pain: ${checkin.achilles_pain ?? 0}/10
+${checkin.achilles_pain != null ? `- Achilles Pain: ${checkin.achilles_pain}/10` : ''}
 - Feeling: ${checkin.feeling ?? 'not logged'}
 - Notes: ${checkin.notes || 'none'}
 
@@ -85,13 +110,14 @@ ${recentSummary}
 RULES:
 - High recovery (score ≥70% or sleep ≥7.5h, feeling great/good): do planned workout as-is or slightly harder
 - Medium recovery (score 33-69% or sleep 6-7.5h, feeling tired): reduce intensity or volume ~20%
-- Low recovery (score <33% or sleep <6h, feeling bad): switch to easy bike or complete rest
-- Achilles pain ≥4: no running at all, suggest bike or upper body strength only
+- Low recovery (score <33% or sleep <6h, feeling bad): switch to ${lowRecoveryAlternative}
+- Achilles pain ≥4: no running, suggest ${achillesAlternative} instead
+- Only ever suggest activities from the athlete's preferred activities list
 - If athlete has missed multiple sessions this week, suggest catching up gently — don't overload
 
 Reply in exactly this format (3 lines, no extra text):
-LINE 1: Short adapted workout title (e.g. "Easy 6km Run" or "Rest — swap to bike")
-LINE 2: What to do specifically (distances, duration, effort level)
+LINE 1: Short adapted workout title
+LINE 2: What to do specifically (distances, duration, effort level) — only using their preferred activities
 LINE 3: Why — one sentence referencing their actual numbers`;
 
   try {
