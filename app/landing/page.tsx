@@ -1,4 +1,19 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Dromos — AI-Powered Marathon & Running Training App',
+  description: 'Dromos builds a personalised training plan tailored to your goal, schedule, and fitness level. AI coach adapts your workouts daily based on recovery and sleep data.',
+  alternates: { canonical: 'https://dromosrun.app/landing' },
+  openGraph: {
+    title: 'Dromos — AI Running Coach',
+    description: 'Personalised marathon, half marathon, and fitness training plans powered by AI.',
+    url: 'https://dromosrun.app',
+    siteName: 'Dromos',
+    images: [{ url: 'https://dromosrun.app/logo.png', width: 512, height: 512 }],
+    type: 'website',
+  },
+};
 
 export default function LandingPage() {
   return (
