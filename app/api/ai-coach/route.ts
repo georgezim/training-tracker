@@ -95,7 +95,7 @@ LINE 2: What to do specifically (distances, duration, effort level)
 LINE 3: Why — one sentence referencing their actual numbers`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     const lines = text.split('\n').filter(Boolean);
