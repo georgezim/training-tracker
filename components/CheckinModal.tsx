@@ -47,8 +47,11 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, o
     setError('');
     const payload: Record<string, unknown> = {
       user_id: userId, date: todayStr,
-      achilles_pain: achilles, feeling,
+      feeling,
     };
+    if (profile?.injury_notes) {
+      payload.achilles_pain = achilles;
+    }
     if (hasTracker) {
       payload.whoop_recovery = whoop;
       payload.sleep_score    = sleep;

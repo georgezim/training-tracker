@@ -102,6 +102,7 @@ export default function TodayPage() {
   const [showMissedModal, setShowMissedModal] = useState(false);
   const [missedReason, setMissedReason] = useState('');
   const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -267,6 +268,18 @@ export default function TodayPage() {
     setToggling(false);
   }
 
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    const ext = file.name.split('.').pop();
+    const path = `${userId}/avatar.${ext}`;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (uploadError) { console.error('Avatar upload failed:', uploadError); return; }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+    setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : prev);
+  }
+
   const bgClass = COLOR_BG[workout.color] ?? 'bg-gray-700';
   const dateLabel = today.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -289,9 +302,11 @@ export default function TodayPage() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <img src="/logo.png" alt="Dromos" className="w-9 h-9 rounded-xl object-cover" />
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" className="text-gray-500 text-xs px-2 py-1 hover:text-gray-300">Sign out</button>
-            </form>
+            <button onClick={() => setShowProfile(true)} className="p-2 text-gray-400 hover:text-white transition-colors">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
             {racePlanInfo && racePlanInfo.currentWeek > 0 && racePlanInfo.currentWeek <= racePlanInfo.totalWeeks && (
               <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
                 W{racePlanInfo.currentWeek} / {racePlanInfo.totalWeeks}
@@ -521,7 +536,7 @@ export default function TodayPage() {
                   {checkin.sleep_score != null && (
                     <MetricChip label="Sleep" value={`${checkin.sleep_score}%`} tier={sleepTier(checkin.sleep_score)} />
                   )}
-                  {checkin.achilles_pain != null && (
+                  {checkin.achilles_pain != null && profile?.injury_notes && (
                     <MetricChip label="Achilles" value={`${checkin.achilles_pain}/10`} tier={achillesTier(checkin.achilles_pain)} />
                   )}
                 </div>
@@ -634,6 +649,63 @@ export default function TodayPage() {
                 Save
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* Profile / Settings drawer */}
+      {showProfile && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setShowProfile(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-5"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">Profile</h3>
+              <button onClick={() => setShowProfile(false)} className="text-gray-500 text-2xl leading-none">×</button>
+            </div>
+
+            {/* Avatar */}
+            <div className="flex flex-col items-center gap-3 py-2">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden">
+                  {profile?.avatar_url
+                    ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                    : <span className="text-white text-3xl font-bold">{profile?.name?.charAt(0)?.toUpperCase() ?? '?'}</span>
+                  }
+                </div>
+                <label className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-400">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                </label>
+              </div>
+              <div className="text-center">
+                <p className="text-white font-semibold">{profile?.name ?? '—'}</p>
+                <p className="text-gray-500 text-sm">{profile?.goal?.replace(/_/g, ' ') ?? ''}</p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-800 rounded-xl p-3 text-center">
+                <p className="text-white font-bold text-lg">{profile?.days_per_week ?? '—'}</p>
+                <p className="text-gray-500 text-xs">days/week</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl p-3 text-center">
+                <p className="text-white font-bold text-lg capitalize">{profile?.training_level?.slice(0,3) ?? '—'}</p>
+                <p className="text-gray-500 text-xs">level</p>
+              </div>
+              <div className="bg-gray-800 rounded-xl p-3 text-center">
+                <p className="text-white font-bold text-lg">{racePlanInfo ? `W${racePlanInfo.currentWeek}` : '—'}</p>
+                <p className="text-gray-500 text-xs">current week</p>
+              </div>
+            </div>
+
+            {/* Sign out */}
+            <form action="/api/auth/logout" method="POST">
+              <button type="submit" className="w-full py-3 rounded-xl bg-red-900/40 text-red-300 border border-red-700/30 font-bold text-sm active:scale-95 transition-transform">
+                Sign Out
+              </button>
+            </form>
           </div>
         </>
       )}

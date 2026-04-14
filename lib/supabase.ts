@@ -45,6 +45,7 @@ export interface UserProfile {
   race_date: string | null;
   custom_plan: CustomPlanDay[] | null;
   preferred_activities: string[] | null;
+  avatar_url: string | null;
   created_at?: string;
 }
 

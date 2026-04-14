@@ -82,16 +82,23 @@ export const PHASE_NAMES: Record<number, string> = {
 };
 
 /**
- * Compute the plan start date (Monday) from a race date.
- * Plan starts on the Monday `totalWeeks` weeks before race week.
+ * Compute the plan start date (Monday) anchored to signup date or race date.
  */
-function computePlanStart(raceDateStr: string, totalWeeks: number): Date {
+function computePlanStart(raceDateStr: string, totalWeeks: number, createdAt?: string | null): Date {
+  // Anchor to the Monday of the week the user signed up
+  if (createdAt) {
+    const created = new Date(createdAt);
+    const d = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+    const jsDay = d.getDay(); // 0=Sun
+    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
+    d.setDate(d.getDate() + mondayOffset);
+    return d;
+  }
+  // Fallback: compute backwards from race date
   const race = parseLocalDate(raceDateStr);
-  // Go back totalWeeks * 7 days from race date, then find the Monday of that week
   const planStartMs = race.getTime() - totalWeeks * 7 * 24 * 60 * 60 * 1000;
   const d = new Date(planStartMs);
-  // Align to Monday: getDay()=0 is Sun, we want Mon=0
-  const jsDay = d.getDay(); // 0=Sun
+  const jsDay = d.getDay();
   const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
   d.setDate(d.getDate() + mondayOffset);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -171,7 +178,7 @@ export function getRacePlanInfo(date: Date, profile?: PlanProfile | null): RaceP
     totalWeeks = defaultWeeksForGoal(profile.goal);
   }
 
-  const planStart = computePlanStart(raceDateStr, totalWeeks);
+  const planStart = computePlanStart(raceDateStr, totalWeeks, profile.createdAt);
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffMs = d.getTime() - planStart.getTime();
   const currentWeek = diffMs < 0 ? 0 : Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
