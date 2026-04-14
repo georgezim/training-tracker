@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="bg-gray-950">
       <head>
-        <link rel="apple-touch-icon" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/logo.jpeg" />
       </head>
       <body className="bg-gray-950 text-white">
         {children}

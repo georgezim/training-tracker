@@ -169,7 +169,7 @@ export default function SignupPage() {
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
         </div>
-        <h1 className="text-white text-2xl font-bold">Dromos</h1>
+        <img src="/logo.jpeg" alt="Dromos" style={{ height: '36px', width: 'auto', margin: '0 auto' }} />
         <p className="text-gray-500 text-sm mt-1">{STEP_TITLES[step]}</p>
       </div>
 
