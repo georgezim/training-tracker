@@ -271,7 +271,100 @@ export function isGymWorkout(type: string) { return type === 'gym' || type === '
 // ─── Race-relative workout generation ────────────────────────────────────────
 
 /**
- * Generate a race-training workout for a given day, phase, and week within that phase.
+ * Generate a phase-appropriate run workout.
+ * isLongRun: true → long run logic; false → quality/easy run logic
+ */
+function getRaceRunWorkout(
+  isLongRun: boolean,
+  phase: number,
+  progress: number,
+  goalMultiplier: number,
+  goal: string,
+): WorkoutInfo {
+  if (isLongRun) {
+    if (phase === 4) {
+      const km = Math.round(12 * goalMultiplier);
+      return { type: 'run', label: `Easy Long Run — ${km}km`, description: `${km}km at easy pace. Trust the taper.`, color: 'blue' };
+    }
+    const baseKm = Math.round(8 * goalMultiplier);
+    const maxKm = goal === 'marathon' ? 35 : goal === 'half_marathon' ? 22 : 14;
+    const km = Math.round(baseKm + (maxKm - baseKm) * Math.min(1, progress * 1.1));
+    let desc = `${km}km long run`;
+    if (phase === 1) desc += ' — easy conversational pace, HR Zone 2';
+    else if (phase === 2) desc += ' — mostly easy, final 2km at goal pace';
+    else desc += ' — includes goal-pace segments. Practice nutrition every 40min.';
+    return { type: 'run', label: `Long Run — ${km}km`, description: desc, color: 'blue' };
+  } else {
+    if (phase === 4) {
+      const km = Math.round(5 + 3 * goalMultiplier);
+      return { type: 'run', label: `Easy Run — ${km}km`, description: `${km}km easy pace — legs should feel fresh. HR Zone 2.`, color: 'blue' };
+    }
+    const baseKm = 5;
+    const maxKm = Math.round(16 * goalMultiplier);
+    const km = Math.round(baseKm + (maxKm - baseKm) * progress);
+    if (phase === 1) {
+      return { type: 'run', label: `Easy Run — ${km}km`, description: `${km}km easy — conversational pace, HR Zone 2`, color: 'blue' };
+    }
+    if (phase === 2) {
+      const tempoKm = Math.round(km * 0.4);
+      const wuKm = Math.round((km - tempoKm) * 0.6);
+      const cdKm = km - wuKm - tempoKm;
+      return { type: 'run', label: `Tempo Run — ${km}km`, description: `${wuKm}km warm-up, ${tempoKm}km tempo, ${cdKm}km cool-down`, color: 'blue' };
+    }
+    const mpKm = Math.round(km * 0.5);
+    const wuKm = Math.round((km - mpKm) * 0.5);
+    const cdKm = km - wuKm - mpKm;
+    return { type: 'run', label: `Race Pace Run — ${km}km`, description: `${wuKm}km WU, ${mpKm}km @ goal pace, ${cdKm}km CD`, color: 'blue' };
+  }
+}
+
+/**
+ * Generate a race workout by activity TYPE rather than by day position.
+ * Used when a custom plan defines which days have which activity type.
+ */
+function getRaceWorkoutByType(
+  activityType: string,
+  isLongSession: boolean,
+  phase: number,
+  weekInPlan: number,
+  totalWeeks: number,
+  goal: string,
+): WorkoutInfo {
+  const progress = Math.min(1, weekInPlan / Math.max(1, totalWeeks));
+  const goalMultiplier = goal === 'marathon' ? 1.0 : goal === 'half_marathon' ? 0.65 : 0.45;
+
+  switch (activityType) {
+    case 'run':
+      return getRaceRunWorkout(isLongSession, phase, progress, goalMultiplier, goal);
+
+    case 'gym':
+      if (phase === 4) {
+        return isLongSession
+          ? { type: 'gym', label: 'Mobility & Core', description: 'Easy mobility work + core. No heavy lifting. 30min.', color: 'purple' }
+          : { type: 'gym', label: 'Light Strength', description: 'Light maintenance session — reduced volume. Keep the body moving.', color: 'purple' };
+      }
+      if (phase >= 3) {
+        return { type: 'gym', label: 'Gym — Strength', description: 'Strength session + eccentric heel drops: 3 x 15 each leg. Focus on single-leg stability.', color: 'purple' };
+      }
+      if (phase >= 2) {
+        return { type: 'gym', label: 'Gym + Easy Run', description: 'Strength class, then 20-30min easy run straight after — practice running on tired legs', color: 'purple' };
+      }
+      return { type: 'gym', label: 'Gym — Strength', description: 'Full body strength — squats, deadlifts, core, upper body. 45-60min', color: 'purple' };
+
+    case 'bike': {
+      const baseDur = 40;
+      const maxDur = 65;
+      const dur = phase === 4 ? 40 : Math.round(baseDur + (maxDur - baseDur) * progress);
+      return { type: 'bike', label: 'Bike', description: `${dur}min easy cycling — Zone 2, fully aerobic`, color: 'orange' };
+    }
+
+    default:
+      return { type: 'rest', label: 'REST', description: 'Complete rest. Legs up, stay hydrated, sleep well.', color: 'gray' };
+  }
+}
+
+/**
+ * Generate a race-training workout for a given day using default day assignments.
  * Day: 0=Mon(run), 1=Tue(gym), 2=Wed(bike), 3=Thu(gym), 4=Fri(rest), 5=Sat(long run), 6=Sun(rest)
  */
 function getRaceWorkoutForDay(
@@ -299,58 +392,21 @@ function getRaceWorkoutForDay(
     return { type: 'rest', label: 'Post-Race', description: 'You did it! Rest and recover. You\'ve earned it.', color: 'gray' };
   }
 
-  // Progress factor: 0.0 at start → 1.0 at end of plan
   const progress = Math.min(1, weekInPlan / Math.max(1, totalWeeks));
-
-  // Base distances scale with goal
   const goalMultiplier = goal === 'marathon' ? 1.0 : goal === 'half_marathon' ? 0.65 : 0.45;
 
   switch (day) {
-    case 0: { // Monday — Run
-      if (phase === 4) { // Taper
-        const km = Math.round(5 + 3 * goalMultiplier);
-        return { type: 'run', label: `Easy Run — ${km}km`, description: `${km}km easy pace — legs should feel fresh. HR Zone 2.`, color: 'blue' };
-      }
-      const baseKm = 5;
-      const maxKm = Math.round(16 * goalMultiplier);
-      const km = Math.round(baseKm + (maxKm - baseKm) * progress);
-      if (phase === 1) {
-        return { type: 'run', label: `Easy Run — ${km}km`, description: `${km}km easy — conversational pace, HR Zone 2`, color: 'blue' };
-      }
-      if (phase === 2) {
-        const tempoKm = Math.round(km * 0.4);
-        const wuKm = Math.round((km - tempoKm) * 0.6);
-        const cdKm = km - wuKm - tempoKm;
-        return { type: 'run', label: `Tempo Run — ${km}km`, description: `${wuKm}km warm-up, ${tempoKm}km tempo, ${cdKm}km cool-down`, color: 'blue' };
-      }
-      // Phase 3 — race specific
-      const mpKm = Math.round(km * 0.5);
-      const wuKm = Math.round((km - mpKm) * 0.5);
-      const cdKm = km - wuKm - mpKm;
-      return { type: 'run', label: `Race Pace Run — ${km}km`, description: `${wuKm}km WU, ${mpKm}km @ goal pace, ${cdKm}km CD`, color: 'blue' };
-    }
+    case 0: // Monday — Quality run
+      return getRaceRunWorkout(false, phase, progress, goalMultiplier, goal);
 
     case 1: // Tuesday — Gym
-      if (phase === 4) {
-        return { type: 'gym', label: 'Light Strength', description: 'Light maintenance session — reduced volume. Keep the body moving.', color: 'purple' };
-      }
-      return {
-        type: 'gym',
-        label: 'Gym — Strength',
-        description: phase >= 3
-          ? 'Strength session + eccentric heel drops: 3 x 15 each leg. Focus on single-leg stability.'
-          : 'Full body strength — squats, deadlifts, core, upper body. 45-60min',
-        color: 'purple',
-      };
+      return getRaceWorkoutByType('gym', false, phase, weekInPlan, totalWeeks, goal);
 
     case 2: { // Wednesday — Bike
-      const baseDur = 40;
-      const maxDur = 65;
-      const dur = phase === 4 ? 40 : Math.round(baseDur + (maxDur - baseDur) * progress);
-      return { type: 'bike', label: 'Bike', description: `${dur}min easy cycling — Zone 2, fully aerobic`, color: 'orange' };
+      return getRaceWorkoutByType('bike', false, phase, weekInPlan, totalWeeks, goal);
     }
 
-    case 3: // Thursday — Gym
+    case 3: // Thursday — Gym (with run in later phases)
       if (phase === 4) {
         return { type: 'gym', label: 'Mobility & Core', description: 'Easy mobility work + core. No heavy lifting. 30min.', color: 'purple' };
       }
@@ -367,20 +423,8 @@ function getRaceWorkoutForDay(
     case 4: // Friday — REST
       return { type: 'rest', label: 'REST', description: 'Complete rest. Legs up, stay hydrated, sleep well.', color: 'gray' };
 
-    case 5: { // Saturday — Long Run
-      if (phase === 4) { // Taper
-        const km = Math.round(12 * goalMultiplier);
-        return { type: 'run', label: `Easy Long Run — ${km}km`, description: `${km}km at easy pace. Trust the taper.`, color: 'blue' };
-      }
-      const baseKm = Math.round(8 * goalMultiplier);
-      const maxKm = goal === 'marathon' ? 35 : goal === 'half_marathon' ? 22 : 14;
-      const km = Math.round(baseKm + (maxKm - baseKm) * Math.min(1, progress * 1.1)); // slight overshoot to hit max before taper
-      let desc = `${km}km long run`;
-      if (phase === 1) desc += ' — easy conversational pace, HR Zone 2';
-      else if (phase === 2) desc += ' — mostly easy, final 2km at goal pace';
-      else desc += ' — includes goal-pace segments. Practice nutrition every 40min.';
-      return { type: 'run', label: `Long Run — ${km}km`, description: desc, color: 'blue' };
-    }
+    case 5: // Saturday — Long Run
+      return getRaceRunWorkout(true, phase, progress, goalMultiplier, goal);
 
     case 6: // Sunday — REST
       return { type: 'rest', label: 'REST', description: 'Active recovery: easy walk, stretch, foam roll. Eat well.', color: 'gray' };
@@ -471,16 +515,41 @@ export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile |
 
   const raceGoals = ['marathon', 'half_marathon', '10k'];
 
-  // Race-based goals → race-date-relative plan
+  // Race-based goals → race-date-relative phased plan
   if (raceGoals.includes(profile.goal)) {
     const info = getRacePlanInfo(date, profile);
     if (!info) return REST_DAY;
 
     const day = getDayOfWeek(date);
-    const raceDateStr = info.raceDate;
     const todayStr = dateToString(date);
-    const isRaceDay = todayStr === raceDateStr;
+    const isRaceDay = todayStr === info.raceDate;
 
+    if (isRaceDay) {
+      const goalLabel = profile.goal === 'marathon' ? 'Marathon' : profile.goal === 'half_marathon' ? 'Half Marathon' : '10K';
+      return { type: 'race', label: `Race Day — ${goalLabel}`, description: `RACE DAY! You've trained for this. Trust the process, run your race.`, color: 'red' };
+    }
+
+    if (info.phase === 0) {
+      return { type: 'rest', label: 'Pre-Plan', description: "Your training plan hasn't started yet. Rest and prepare.", color: 'gray' };
+    }
+    if (info.phase === 5) {
+      return { type: 'rest', label: 'Post-Race', description: "You did it! Rest and recover. You've earned it.", color: 'gray' };
+    }
+
+    // If user has a Gemini-generated custom plan, use its activity structure
+    // but apply phase-appropriate descriptions/distances on top
+    if (profile.customPlan && Array.isArray(profile.customPlan) && profile.customPlan.length === 7) {
+      const customDay = profile.customPlan[day];
+      const activityType = customDay?.type ?? 'rest';
+
+      // Identify the long run day from the custom plan (preferred long day)
+      const preferredLongDayIdx = DAY_INDEX[profile.preferredLongDay] ?? 5;
+      const isLongRunDay = day === preferredLongDayIdx && activityType === 'run';
+
+      return getRaceWorkoutByType(activityType, isLongRunDay, info.phase, info.currentWeek, info.totalWeeks, profile.goal);
+    }
+
+    // Fallback: use default day assignments (Mon=run, Tue=gym, Wed=bike, etc.)
     return getRaceWorkoutForDay(day, info.phase, info.currentWeek, info.totalWeeks, profile.goal, isRaceDay);
   }
 

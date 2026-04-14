@@ -138,7 +138,25 @@ export default function TodayPage() {
     const valid = editRaces.filter(r => r.name && r.date);
     setRaces(valid);
     setEditingRaces(false);
-    await supabase.from('profiles').update({ races: valid }).eq('id', userId);
+
+    // Build the update payload
+    const updatePayload: Record<string, unknown> = { races: valid };
+
+    // For race goals: also sync race_date to the soonest upcoming race
+    // This makes the race nudge disappear and unlocks the phased training plan
+    if (profile && ['marathon', 'half_marathon', '10k'].includes(profile.goal ?? '')) {
+      const todayDateStr = dateToString(today);
+      const upcoming = valid
+        .filter(r => r.date >= todayDateStr)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const newRaceDate = upcoming[0]?.date ?? null;
+      updatePayload.race_date = newRaceDate;
+
+      // Update local profile state so the nudge disappears immediately
+      setProfile(prev => prev ? { ...prev, race_date: newRaceDate, races: valid } : prev);
+    }
+
+    await supabase.from('profiles').update(updatePayload).eq('id', userId);
   }
   function updateEditRace(id: string, field: keyof UserRace, value: string) {
     setEditRaces(r => r.map(race => race.id === id ? { ...race, [field]: value } : race));

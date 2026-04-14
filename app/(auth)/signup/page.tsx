@@ -46,6 +46,14 @@ const EQUIPMENT = [
   { value: 'none',            label: '🚫 No equipment' },
 ];
 
+const PREFERRED_ACTIVITIES = [
+  { value: 'run',      label: '🏃 Running' },
+  { value: 'gym',      label: '🏋️ Strength / Gym' },
+  { value: 'bike',     label: '🚴 Cycling' },
+  { value: 'swim',     label: '🏊 Swimming' },
+  { value: 'other',    label: '🔧 Other' },
+];
+
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const STEP_TITLES: Record<Step, string> = {
@@ -78,14 +86,21 @@ export default function SignupPage() {
   const [sleepDevice, setSleepDevice] = useState('none');
 
   // Step 4 — setup
-  const [equipment, setEquipment]   = useState<string[]>(['outdoor_running']);
-  const [injuryNotes, setInjuryNotes] = useState('');
-  const [preferredDay, setPreferredDay] = useState('Sat');
+  const [equipment, setEquipment]           = useState<string[]>(['outdoor_running']);
+  const [preferredActivities, setPreferredActivitiesState] = useState<string[]>(['run']);
+  const [injuryNotes, setInjuryNotes]       = useState('');
+  const [preferredDay, setPreferredDay]     = useState('Sat');
 
   const stepIndex = STEPS.indexOf(step);
 
   function toggleEquipment(val: string) {
     setEquipment(prev =>
+      prev.includes(val) ? prev.filter(e => e !== val) : [...prev, val]
+    );
+  }
+
+  function toggleActivity(val: string) {
+    setPreferredActivitiesState(prev =>
       prev.includes(val) ? prev.filter(e => e !== val) : [...prev, val]
     );
   }
@@ -126,33 +141,33 @@ export default function SignupPage() {
         id: data.user.id,
         name,
         goal,
-        goal_other:         goal === 'other' ? goalOther : null,
-        training_level:     level,
-        days_per_week:      daysPerWeek,
-        age:                age ? parseInt(age) : null,
-        current_activity:   currentActivity,
-        equipment:          equipment,
-        injury_notes:       injuryNotes || null,
-        preferred_long_day: preferredDay,
-        sleep_device:       sleepDevice,
-        has_sleep_tracker:  sleepDevice !== 'none',
+        goal_other:            goal === 'other' ? goalOther : null,
+        training_level:        level,
+        days_per_week:         daysPerWeek,
+        age:                   age ? parseInt(age) : null,
+        current_activity:      currentActivity,
+        equipment:             equipment,
+        preferred_activities:  preferredActivities,
+        injury_notes:          injuryNotes || null,
+        preferred_long_day:    preferredDay,
+        sleep_device:          sleepDevice,
+        has_sleep_tracker:     sleepDevice !== 'none',
       };
 
       await supabase.from('profiles').upsert(profileData);
 
-      // Generate personalized training plan with Gemini (race goals use built-in phased plan)
-      const raceGoals = ['marathon', 'half_marathon', '10k'];
-      if (!raceGoals.includes(goal)) {
-        try {
-          await fetch('/api/generate-plan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: data.user.id, profile: profileData }),
-          });
-        } catch {
-          // Plan generation is best-effort — don't block signup
-          console.error('Plan generation failed, will use fallback templates');
-        }
+      // Generate personalised training plan with Gemini for ALL goals
+      // Race goals: Gemini generates the weekly activity structure (which days have which type)
+      // Non-race goals: Gemini generates the full plan with specific workout details
+      try {
+        await fetch('/api/generate-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: data.user.id, profile: profileData }),
+        });
+      } catch {
+        // Plan generation is best-effort — don't block signup
+        console.error('Plan generation failed, will use fallback templates');
       }
     }
 
@@ -370,6 +385,27 @@ export default function SignupPage() {
       {/* ── Step 4: Setup ── */}
       {step === 'setup' && (
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="text-gray-400 text-xs font-medium block mb-2">
+              What types of training do you enjoy? <span className="text-gray-600">(select all that apply)</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {PREFERRED_ACTIVITIES.map(a => (
+                <button
+                  key={a.value} type="button" onClick={() => toggleActivity(a.value)}
+                  className={`py-3 px-3 rounded-xl text-sm font-medium text-left transition-colors ${
+                    preferredActivities.includes(a.value)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-900 text-gray-400 border border-gray-800'
+                  }`}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-gray-600 text-xs mt-1.5">Your AI plan will only include activities you enjoy.</p>
+          </div>
+
           <div>
             <label className="text-gray-400 text-xs font-medium block mb-2">Available equipment</label>
             <div className="grid grid-cols-2 gap-2">

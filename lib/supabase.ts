@@ -44,6 +44,7 @@ export interface UserProfile {
   target_race: string | null;
   race_date: string | null;
   custom_plan: CustomPlanDay[] | null;
+  preferred_activities: string[] | null;
   created_at?: string;
 }
 
