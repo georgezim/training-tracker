@@ -188,6 +188,24 @@ export default function TodayPage() {
       if (prof) setProfile(prof as UserProfile);
       setRaces((prof as UserProfile | null)?.races ?? []);
 
+      // Auto-generate personalised plan for users who don't have one yet
+      // (existing users pre-dating onboarding, or signup where Gemini timed out)
+      // Fires silently in the background — does not block the UI
+      if (prof && !prof.custom_plan) {
+        fetch('/api/generate-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, profile: prof }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.plan) {
+              setProfile(prev => prev ? { ...prev, custom_plan: data.plan } : prev);
+            }
+          })
+          .catch(() => { /* silent — will retry on next visit */ });
+      }
+
       // Load AI coach from checkin record
       if (ci?.ai_coach_title) {
         setAiCoach({ title: ci.ai_coach_title, description: ci.ai_coach_description ?? '' });
