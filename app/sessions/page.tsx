@@ -99,7 +99,7 @@ export default function SessionsPage() {
       >
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
-            <h1 className="text-white text-xl font-bold">Training Sessions</h1>
+            <h1 className="text-white text-xl font-bold">Sessions</h1>
             {connected && (
               <button
                 onClick={syncNow}

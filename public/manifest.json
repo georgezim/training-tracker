@@ -1,7 +1,7 @@
 {
-  "name": "Training Tracker",
-  "short_name": "Training",
-  "description": "Marathon training tracker — 31-week plan to Athens",
+  "name": "Dromos",
+  "short_name": "Dromos",
+  "description": "Personal training tracker — AI-powered coaching for your goals",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0f1a",

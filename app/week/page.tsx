@@ -6,9 +6,7 @@ import {
   getWorkoutForDateWithProfile,
   getWorkoutDetail,
   getDaysInCurrentWeek,
-  getWeekNumber,
-  getPhase,
-  PHASE_NAMES,
+  getRacePlanInfo,
   dateToString,
   COLOR_BG,
   COLOR_TEXT,
@@ -30,8 +28,6 @@ export default function WeekPage() {
   anchorDate.setDate(today.getDate() + weekOffset * 7);
 
   const days = getDaysInCurrentWeek(anchorDate);
-  const week = getWeekNumber(anchorDate);
-  const phase = getPhase(week);
   const isCurrentWeek = weekOffset === 0;
 
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
@@ -54,6 +50,8 @@ export default function WeekPage() {
     preferredLongDay: profile.preferred_long_day ?? 'Sat',
     trainingLevel: profile.training_level ?? 'intermediate',
     customPlan: profile.custom_plan ?? null,
+    raceDate: profile.race_date ?? null,
+    createdAt: profile.created_at ?? null,
   } : null;
 
   useEffect(() => {
@@ -132,19 +130,26 @@ export default function WeekPage() {
             >‹</button>
 
             <div className="text-center">
-              <div className="flex items-center justify-center gap-2">
-                <h1 className="text-white text-xl font-bold">
-                  {isCurrentWeek ? 'This Week' : week > 0 && week <= 31 ? `Week ${week}` : 'Pre-Plan'}
-                </h1>
-                {week > 0 && week <= 31 && (
-                  <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
-                    W{week} / 31
-                  </span>
-                )}
-              </div>
-              {week > 0 && week <= 31 && (
-                <p className="text-blue-300/80 text-sm mt-0.5">{PHASE_NAMES[phase]}</p>
-              )}
+              {(() => {
+                const rpi = getRacePlanInfo(anchorDate, planProfile);
+                return (
+                  <>
+                    <div className="flex items-center justify-center gap-2">
+                      <h1 className="text-white text-xl font-bold">
+                        {isCurrentWeek ? 'This Week' : rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks ? `Week ${rpi.currentWeek}` : 'This Week'}
+                      </h1>
+                      {rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks && (
+                        <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
+                          W{rpi.currentWeek} / {rpi.totalWeeks}
+                        </span>
+                      )}
+                    </div>
+                    {rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks && (
+                      <p className="text-blue-300/80 text-sm mt-0.5">{rpi.phaseName}</p>
+                    )}
+                  </>
+                );
+              })()}
               {!isCurrentWeek && (
                 <button
                   onClick={() => setWeekOffset(0)}
@@ -194,7 +199,7 @@ export default function WeekPage() {
               key={dayStr}
               onClick={() => setSelectedDay({
                 workout,
-                detail: getWorkoutDetail(day),
+                detail: getWorkoutDetail(day, planProfile),
                 label: `${DAY_NAMES[i]} ${day.getDate()} ${day.toLocaleString('default', { month: 'short' })}`,
               })}
               className={`rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer active:scale-[0.98] ${

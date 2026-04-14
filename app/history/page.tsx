@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase, DailyCheckin } from '@/lib/supabase';
-import { getWorkoutForDate, parseLocalDate, COLOR_TEXT } from '@/lib/training-plan';
+import { supabase, DailyCheckin, UserProfile } from '@/lib/supabase';
+import { getWorkoutForDateWithProfile, parseLocalDate, COLOR_TEXT, PlanProfile } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 
 const FEELING_EMOJI: Record<string, string> = {
@@ -41,19 +41,30 @@ function Badge({ label, value, t }: { label: string; value: string; t: Tier }) {
 
 export default function HistoryPage() {
   const [checkins, setCheckins] = useState<DailyCheckin[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const planProfile: PlanProfile | null = profile ? {
+    goal: profile.goal,
+    daysPerWeek: profile.days_per_week ?? 4,
+    preferredLongDay: profile.preferred_long_day ?? 'Sat',
+    trainingLevel: profile.training_level ?? 'intermediate',
+    customPlan: profile.custom_plan ?? null,
+    raceDate: profile.race_date ?? null,
+    createdAt: profile.created_at ?? null,
+  } : null;
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
-      const { data } = await supabase
-        .from('daily_checkins')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-        .limit(90);
-      if (data) setCheckins(data as DailyCheckin[]);
+
+      const [{ data: checkinData }, { data: prof }] = await Promise.all([
+        supabase.from('daily_checkins').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(90),
+        supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+      ]);
+      if (checkinData) setCheckins(checkinData as DailyCheckin[]);
+      if (prof) setProfile(prof as UserProfile);
       setLoading(false);
     }
     load();
@@ -69,7 +80,6 @@ export default function HistoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-950" style={{ paddingBottom: '5.5rem' }}>
-      {/* ── Header ── */}
       <header
         className="bg-[#1B2A4A] px-4 pb-5"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 2.5rem)' }}
@@ -97,7 +107,7 @@ export default function HistoryPage() {
 
         {checkins.map((ci) => {
           const date = parseLocalDate(ci.date);
-          const workout = getWorkoutForDate(date);
+          const workout = getWorkoutForDateWithProfile(date, planProfile);
           const colorText = COLOR_TEXT[workout.color] ?? 'text-gray-500';
 
           const dateLabel = date.toLocaleDateString('en-US', {
@@ -111,7 +121,6 @@ export default function HistoryPage() {
               key={ci.id}
               className="bg-gray-900 border border-gray-800 rounded-xl p-4"
             >
-              {/* Top row */}
               <div className="flex items-start justify-between gap-2 mb-2.5">
                 <div className="min-w-0">
                   <p className="text-white text-sm font-semibold">{dateLabel}</p>
@@ -127,7 +136,6 @@ export default function HistoryPage() {
                 </div>
               </div>
 
-              {/* Metrics */}
               <div className="flex gap-2 flex-wrap">
                 {ci.whoop_recovery != null && (
                   <Badge label="Recovery" value={`${ci.whoop_recovery}%`} t={tier(ci.whoop_recovery, 'recovery')} />
@@ -143,9 +151,17 @@ export default function HistoryPage() {
                 )}
               </div>
 
-              {/* Notes */}
               {ci.notes && (
                 <p className="text-gray-500 text-xs mt-2 italic leading-relaxed">"{ci.notes}"</p>
+              )}
+
+              {ci.ai_coach_title && (
+                <div className="mt-2 bg-indigo-950/40 border border-indigo-800/30 rounded-lg px-3 py-2">
+                  <p className="text-indigo-300 text-xs font-semibold">✦ {ci.ai_coach_title}</p>
+                  {ci.ai_coach_description && (
+                    <p className="text-indigo-200/60 text-xs mt-0.5">{ci.ai_coach_description}</p>
+                  )}
+                </div>
               )}
             </div>
           );

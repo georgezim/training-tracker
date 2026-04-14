@@ -24,12 +24,22 @@ export async function POST(req: NextRequest) {
   // Fetch last 7 days of Strava activities
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const { data: recentActivities } = await supabase
-    .from('strava_activities')
-    .select('activity_date, sport_type, distance_m, moving_time_s, avg_heartrate, avg_speed_ms')
-    .eq('user_id', userId)
-    .gte('activity_date', sevenDaysAgo.toISOString().slice(0, 10))
-    .order('activity_date', { ascending: false });
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const [{ data: recentActivities }, { data: recentSessions }] = await Promise.all([
+    supabase
+      .from('strava_activities')
+      .select('activity_date, sport_type, distance_m, moving_time_s, avg_heartrate, avg_speed_ms')
+      .eq('user_id', userId)
+      .gte('activity_date', sevenDaysAgoStr)
+      .order('activity_date', { ascending: false }),
+    supabase
+      .from('completed_sessions')
+      .select('date, session_type, status, missed_reason')
+      .eq('user_id', userId)
+      .gte('date', sevenDaysAgoStr)
+      .order('date', { ascending: false }),
+  ]);
 
   const recentSummary = (recentActivities ?? []).length > 0
     ? (recentActivities ?? []).map(a =>
@@ -37,14 +47,23 @@ export async function POST(req: NextRequest) {
       ).join('\n')
     : 'No recent Strava activities recorded.';
 
+  const sessionsSummary = (recentSessions ?? []).length > 0
+    ? (recentSessions ?? []).map(s =>
+        `${s.date}: ${s.session_type} — ${s.status}${s.status === 'missed' && s.missed_reason ? ` (${s.missed_reason})` : ''}`
+      ).join('\n')
+    : 'No sessions tracked this week.';
+
+  const goalLabel = profile?.goal_other ?? profile?.goal ?? 'general fitness';
+
   const prompt = `You are a personal running coach. Adapt today's planned workout based on this athlete's data. Be concise and specific.
 
 ATHLETE:
-- Goal: ${profile?.goal_other ?? profile?.goal ?? 'marathon'}
+- Goal: ${goalLabel}
 - Level: ${profile?.training_level ?? 'intermediate'}
 - Training days/week: ${profile?.days_per_week ?? 4}
 - Age: ${profile?.age ?? 'unknown'}
 - Injuries/limitations: ${profile?.injury_notes ?? 'none'}
+${profile?.race_date ? `- Race date: ${profile.race_date}` : ''}
 
 TODAY'S PLAN:
 ${plannedWorkout.label}: ${plannedWorkout.description}
@@ -57,7 +76,10 @@ ${checkin.sleep_hours != null ? `- Hours Slept: ${checkin.sleep_hours}h` : ''}
 - Feeling: ${checkin.feeling ?? 'not logged'}
 - Notes: ${checkin.notes || 'none'}
 
-LAST 7 DAYS:
+SESSIONS THIS WEEK:
+${sessionsSummary}
+
+LAST 7 DAYS (Strava):
 ${recentSummary}
 
 RULES:
@@ -65,6 +87,7 @@ RULES:
 - Medium recovery (score 33-69% or sleep 6-7.5h, feeling tired): reduce intensity or volume ~20%
 - Low recovery (score <33% or sleep <6h, feeling bad): switch to easy bike or complete rest
 - Achilles pain ≥4: no running at all, suggest bike or upper body strength only
+- If athlete has missed multiple sessions this week, suggest catching up gently — don't overload
 
 Reply in exactly this format (3 lines, no extra text):
 LINE 1: Short adapted workout title (e.g. "Easy 6km Run" or "Rest — swap to bike")
@@ -77,9 +100,20 @@ LINE 3: Why — one sentence referencing their actual numbers`;
     const text = result.response.text().trim();
     const lines = text.split('\n').filter(Boolean);
 
+    const coachTitle = lines[0] ?? plannedWorkout.label;
+    const coachDesc = lines.slice(1).join(' ');
+
+    // Persist to daily_checkins
+    if (checkin.id) {
+      await supabase.from('daily_checkins').update({
+        ai_coach_title: coachTitle,
+        ai_coach_description: coachDesc,
+      }).eq('id', checkin.id);
+    }
+
     return NextResponse.json({
-      title: lines[0] ?? plannedWorkout.label,
-      description: lines.slice(1).join(' '),
+      title: coachTitle,
+      description: coachDesc,
     });
   } catch (err) {
     console.error('Gemini error:', err);

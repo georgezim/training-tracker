@@ -1,6 +1,6 @@
-# Training Tracker
+# Dromos
 
-Personal marathon training PWA — 31-week plan to the Athens Classic Marathon.
+Personal training PWA — AI-powered coaching for marathon, half marathon, 10K, and fitness goals.
 
 ## Quick Start
 

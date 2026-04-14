@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { supabase, DailyCheckin, FeelingType, UserProfile } from '@/lib/supabase';
-import { dateToString, getWorkoutForDate } from '@/lib/training-plan';
+import { getWorkoutForDateWithProfile, PlanProfile } from '@/lib/training-plan';
 
 const FEELING_OPTIONS: { value: FeelingType; label: string; emoji: string; cls: string }[] = [
   { value: 'great',   label: 'Great',   emoji: '🟢', cls: 'bg-green-700 text-white border-green-600' },
@@ -14,13 +14,14 @@ const FEELING_OPTIONS: { value: FeelingType; label: string; emoji: string; cls: 
 
 interface Props {
   profile: UserProfile | null;
+  planProfile: PlanProfile | null;
   userId: string;
   todayStr: string;
   onSave: (checkin: DailyCheckin) => void;
   onDismiss: () => void;
 }
 
-export default function CheckinModal({ profile, userId, todayStr, onSave, onDismiss }: Props) {
+export default function CheckinModal({ profile, planProfile, userId, todayStr, onSave, onDismiss }: Props) {
   const hasTracker = profile?.has_sleep_tracker ?? false;
 
   const [whoop, setWhoop]           = useState(70);
@@ -70,20 +71,28 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
 
       if (data) {
         const savedCheckin = data as DailyCheckin;
+        // Call AI coach and persist to Supabase
+        const workout = getWorkoutForDateWithProfile(new Date(), planProfile);
         fetch('/api/ai-coach', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plannedWorkout: getWorkoutForDate(new Date()), checkin: savedCheckin }),
-        }).then(r => r.json()).then(coach => {
+          body: JSON.stringify({ plannedWorkout: workout, checkin: savedCheckin }),
+        }).then(r => r.json()).then(async (coach) => {
           if (coach.title) {
-            localStorage.setItem('ai_coach_today', JSON.stringify({ ...coach, date: todayStr }));
+            // Persist AI coach to the checkin record
+            await supabase.from('daily_checkins').update({
+              ai_coach_title: coach.title,
+              ai_coach_description: coach.description ?? '',
+            }).eq('id', savedCheckin.id);
+            // Update the returned checkin with AI coach data
+            savedCheckin.ai_coach_title = coach.title;
+            savedCheckin.ai_coach_description = coach.description ?? '';
           }
         }).catch(() => {});
         onSave(savedCheckin);
         return;
       }
 
-      // No data and no error — shouldn't happen but handle gracefully
       setError('No data returned — check-in may not have saved');
       setSaving(false);
     } catch (err) {
@@ -101,7 +110,6 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 bg-gray-700 rounded-full" />
         </div>
@@ -116,7 +124,6 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
           </div>
 
           <div className="space-y-4">
-            {/* Tracker fields */}
             {hasTracker && (
               <>
                 <div className="bg-gray-900 rounded-2xl p-4">
@@ -138,7 +145,6 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
               </>
             )}
 
-            {/* No-tracker field */}
             {!hasTracker && (
               <div className="bg-gray-900 rounded-2xl p-4">
                 <div className="flex justify-between mb-2">
@@ -150,7 +156,6 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
               </div>
             )}
 
-            {/* Pain tracker — only if user has injury notes */}
             {profile?.injury_notes && (
               <div className="bg-gray-900 rounded-2xl p-4">
                 <div className="flex justify-between mb-2">
@@ -163,7 +168,6 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
               </div>
             )}
 
-            {/* Feeling */}
             <div>
               <p className="text-white text-sm font-semibold mb-2">How are you feeling?</p>
               <div className="flex gap-2 flex-wrap">

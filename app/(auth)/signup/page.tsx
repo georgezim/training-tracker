@@ -11,6 +11,7 @@ const STEPS: Step[] = ['account', 'goals', 'fitness', 'setup'];
 const GOALS = [
   { value: 'marathon',      label: '🏆 Run a Marathon' },
   { value: 'half_marathon', label: '🥈 Run a Half Marathon' },
+  { value: '10k',           label: '🏅 Run a 10K' },
   { value: 'get_fit',       label: '💪 Get Fit' },
   { value: 'lose_weight',   label: '⚡ Lose Weight' },
   { value: 'other',         label: '✏️ Other' },
@@ -139,8 +140,9 @@ export default function SignupPage() {
 
       await supabase.from('profiles').upsert(profileData);
 
-      // Generate personalized training plan with Gemini (non-blocking for marathon)
-      if (goal !== 'marathon' && goal !== 'half_marathon') {
+      // Generate personalized training plan with Gemini (race goals use built-in phased plan)
+      const raceGoals = ['marathon', 'half_marathon', '10k'];
+      if (!raceGoals.includes(goal)) {
         try {
           await fetch('/api/generate-plan', {
             method: 'POST',
@@ -167,7 +169,7 @@ export default function SignupPage() {
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
         </div>
-        <h1 className="text-white text-2xl font-bold">Training Tracker</h1>
+        <h1 className="text-white text-2xl font-bold">Dromos</h1>
         <p className="text-gray-500 text-sm mt-1">{STEP_TITLES[step]}</p>
       </div>
 

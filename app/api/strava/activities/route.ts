@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthUserId } from '@/lib/api-auth';
-import { getWorkoutForDate, isRunWorkout, isBikeWorkout, isGymWorkout } from '@/lib/training-plan';
+import { getWorkoutForDateWithProfile, isRunWorkout, isBikeWorkout, isGymWorkout, PlanProfile } from '@/lib/training-plan';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -76,13 +76,25 @@ function toRow(a: any, userId: string) {
 }
 
 async function autoMarkSessions(activities: any[], userId: string) {
+  // Fetch user profile for plan-aware workout matching
+  const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  const planProfile: PlanProfile | null = prof ? {
+    goal: prof.goal,
+    daysPerWeek: prof.days_per_week ?? 4,
+    preferredLongDay: prof.preferred_long_day ?? 'Sat',
+    trainingLevel: prof.training_level ?? 'intermediate',
+    customPlan: prof.custom_plan ?? null,
+    raceDate: prof.race_date ?? null,
+    createdAt: prof.created_at ?? null,
+  } : null;
+
   // Build a map of date → matched workout types from Strava activities
   const matches: Record<string, string> = {};
 
   for (const a of activities) {
     const dateStr = a.start_date_local.slice(0, 10);
     const date = new Date(dateStr + 'T12:00:00');
-    const workout = getWorkoutForDate(date);
+    const workout = getWorkoutForDateWithProfile(date, planProfile);
     if (workout.type === 'rest') continue;
 
     const sport = a.sport_type as string;

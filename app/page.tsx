@@ -6,8 +6,7 @@ import CheckinModal from '@/components/CheckinModal';
 import {
   getWorkoutForDateWithProfile,
   getWorkoutDetail,
-  getWeekNumber,
-  getPhase,
+  getRacePlanInfo,
   PHASE_NAMES,
   dateToString,
   COLOR_BG,
@@ -77,12 +76,21 @@ function daysUntil(dateStr: string, today: Date): number {
   return Math.floor((d.getTime() - t.getTime()) / (24 * 60 * 60 * 1000));
 }
 
+function buildPlanProfile(profile: UserProfile): PlanProfile {
+  return {
+    goal: profile.goal,
+    daysPerWeek: profile.days_per_week ?? 4,
+    preferredLongDay: profile.preferred_long_day ?? 'Sat',
+    trainingLevel: profile.training_level ?? 'intermediate',
+    customPlan: profile.custom_plan ?? null,
+    raceDate: profile.race_date ?? null,
+    createdAt: profile.created_at ?? null,
+  };
+}
+
 export default function TodayPage() {
   const today = new Date();
   const todayStr = dateToString(today);
-
-  const week = getWeekNumber(today);
-  const phase = getPhase(week);
 
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [session, setSession] = useState<CompletedSession | null>(null);
@@ -95,14 +103,9 @@ export default function TodayPage() {
   const [missedReason, setMissedReason] = useState('');
   const [showCheckinModal, setShowCheckinModal] = useState(false);
 
-  const planProfile: PlanProfile | null = profile ? {
-    goal: profile.goal,
-    daysPerWeek: profile.days_per_week ?? 4,
-    preferredLongDay: profile.preferred_long_day ?? 'Sat',
-    trainingLevel: profile.training_level ?? 'intermediate',
-    customPlan: profile.custom_plan ?? null,
-  } : null;
+  const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
+  const racePlanInfo = getRacePlanInfo(today, planProfile);
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   // Read Strava OAuth result from URL params
@@ -118,21 +121,11 @@ export default function TodayPage() {
     } else if (status === 'denied') {
       setStravaMsg({ type: 'error', text: 'Strava authorization was denied.' });
     }
-    // Clean up URL
     if (status) window.history.replaceState({}, '', '/');
   }, []);
 
-  // AI Coach
+  // AI Coach — from Supabase checkin record
   const [aiCoach, setAiCoach] = useState<{ title: string; description: string } | null>(null);
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('ai_coach_today');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.date === todayStr) setAiCoach(parsed);
-      }
-    } catch {}
-  }, [todayStr]);
 
   // Races
   const [races, setRaces] = useState<UserRace[]>([]);
@@ -176,6 +169,11 @@ export default function TodayPage() {
       setSession(se ?? null);
       if (prof) setProfile(prof as UserProfile);
       setRaces((prof as UserProfile | null)?.races ?? []);
+
+      // Load AI coach from checkin record
+      if (ci?.ai_coach_title) {
+        setAiCoach({ title: ci.ai_coach_title, description: ci.ai_coach_description ?? '' });
+      }
 
       // Show checkin popup after 5am if not yet checked in
       if (!ci) {
@@ -230,6 +228,11 @@ export default function TodayPage() {
     day: 'numeric',
   });
 
+  // Race goals that need a race date nudge
+  const needsRaceDateNudge = profile &&
+    ['marathon', 'half_marathon', '10k'].includes(profile.goal ?? '') &&
+    !profile.race_date;
+
   return (
     <div className="min-h-screen bg-gray-950" style={{ paddingBottom: '5.5rem' }}>
       {/* ── Header ── */}
@@ -239,18 +242,18 @@ export default function TodayPage() {
       >
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
-            <h1 className="text-white text-xl font-bold tracking-tight">Training Tracker</h1>
+            <h1 className="text-white text-xl font-bold tracking-tight">Dromos</h1>
             <form action="/api/auth/logout" method="POST">
               <button type="submit" className="text-gray-500 text-xs px-2 py-1 hover:text-gray-300">Sign out</button>
             </form>
-            {week > 0 && week <= 31 && (
+            {racePlanInfo && racePlanInfo.currentWeek > 0 && racePlanInfo.currentWeek <= racePlanInfo.totalWeeks && (
               <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
-                W{week} / 31
+                W{racePlanInfo.currentWeek} / {racePlanInfo.totalWeeks}
               </span>
             )}
           </div>
-          {week > 0 && week <= 31 && (
-            <p className="text-blue-300/80 text-sm mt-0.5">{PHASE_NAMES[phase]}</p>
+          {racePlanInfo && racePlanInfo.currentWeek > 0 && racePlanInfo.currentWeek <= racePlanInfo.totalWeeks && (
+            <p className="text-blue-300/80 text-sm mt-0.5">{racePlanInfo.phaseName}</p>
           )}
           {/* Races */}
           <div className="mt-3 space-y-2">
@@ -276,7 +279,6 @@ export default function TodayPage() {
       <main className="max-w-md mx-auto px-4 pt-5 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-gray-500 text-sm">{dateLabel}</p>
-          {/* Checkin status */}
           {checkin ? (
             <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-900/30 px-3 py-1.5 rounded-full font-medium">
               ✓ Checked in
@@ -291,12 +293,24 @@ export default function TodayPage() {
           )}
         </div>
 
+        {/* ── Race date nudge ── */}
+        {needsRaceDateNudge && (
+          <div className="bg-amber-950/50 border border-amber-800/40 rounded-xl px-4 py-3">
+            <p className="text-amber-300 text-sm font-semibold">📅 Add your race date</p>
+            <p className="text-amber-200/60 text-xs mt-1">
+              Set your race date to get a fully personalized training plan with the right phases and taper.
+            </p>
+            <button onClick={openRaceEditor} className="text-amber-400 text-xs font-medium mt-2 underline underline-offset-2">
+              Add your race date →
+            </button>
+          </div>
+        )}
+
         {/* ── Workout Card ── */}
         <div
           className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
           onClick={() => setShowDetail(true)}
         >
-          {/* Subtle background texture */}
           <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-white to-transparent" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-1">
@@ -350,8 +364,8 @@ export default function TodayPage() {
           </div>
         </div>
 
-        {/* ── Goal-based plan notice for non-marathon users ── */}
-        {profile && profile.goal && !['marathon', 'half_marathon'].includes(profile.goal) && (
+        {/* ── Goal-based plan notice for non-race users ── */}
+        {profile && profile.goal && !['marathon', 'half_marathon', '10k'].includes(profile.goal) && (
           <div className="bg-blue-950/50 border border-blue-800/40 rounded-xl px-4 py-3">
             <p className="text-blue-300 text-sm font-semibold">
               {profile.custom_plan ? '✦ Your AI-generated plan' : '✦ Your personalised plan'}
@@ -388,10 +402,7 @@ export default function TodayPage() {
         {aiCoach && (
           <AiCoachCard
             coach={aiCoach}
-            onDismiss={() => {
-              setAiCoach(null);
-              localStorage.removeItem('ai_coach_today');
-            }}
+            onDismiss={() => setAiCoach(null)}
           />
         )}
 
@@ -490,7 +501,7 @@ export default function TodayPage() {
       {showDetail && (
         <WorkoutDetailSheet
           workout={workout}
-          detail={getWorkoutDetail(today)}
+          detail={getWorkoutDetail(today, planProfile)}
           dateLabel={dateLabel}
           onClose={() => setShowDetail(false)}
         />
@@ -500,9 +511,16 @@ export default function TodayPage() {
       {showCheckinModal && userId && (
         <CheckinModal
           profile={profile}
+          planProfile={planProfile}
           userId={userId}
           todayStr={todayStr}
-          onSave={(saved) => { setCheckin(saved); setShowCheckinModal(false); }}
+          onSave={(saved) => {
+            setCheckin(saved);
+            if (saved.ai_coach_title) {
+              setAiCoach({ title: saved.ai_coach_title, description: saved.ai_coach_description ?? '' });
+            }
+            setShowCheckinModal(false);
+          }}
           onDismiss={() => setShowCheckinModal(false)}
         />
       )}
@@ -522,33 +540,13 @@ export default function TodayPage() {
               {editRaces.map((r) => (
                 <div key={r.id} className="bg-gray-800 rounded-xl p-3 space-y-2">
                   <div className="flex gap-2">
-                    <input
-                      value={r.emoji}
-                      onChange={e => updateEditRace(r.id, 'emoji', e.target.value)}
-                      className="w-10 bg-gray-700 rounded-lg px-2 py-1.5 text-white text-sm text-center"
-                      maxLength={2}
-                    />
-                    <input
-                      value={r.name}
-                      onChange={e => updateEditRace(r.id, 'name', e.target.value)}
-                      placeholder="Race name"
-                      className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-500"
-                    />
+                    <input value={r.emoji} onChange={e => updateEditRace(r.id, 'emoji', e.target.value)} className="w-10 bg-gray-700 rounded-lg px-2 py-1.5 text-white text-sm text-center" maxLength={2} />
+                    <input value={r.name} onChange={e => updateEditRace(r.id, 'name', e.target.value)} placeholder="Race name" className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-500" />
                     <button onClick={() => removeRace(r.id)} className="text-red-400 text-lg px-1">×</button>
                   </div>
                   <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={r.date}
-                      onChange={e => updateEditRace(r.id, 'date', e.target.value)}
-                      className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm"
-                    />
-                    <input
-                      value={r.distance}
-                      onChange={e => updateEditRace(r.id, 'distance', e.target.value)}
-                      placeholder="Distance"
-                      className="w-20 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-500"
-                    />
+                    <input type="date" value={r.date} onChange={e => updateEditRace(r.id, 'date', e.target.value)} className="flex-1 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm" />
+                    <input value={r.distance} onChange={e => updateEditRace(r.id, 'distance', e.target.value)} placeholder="Distance" className="w-20 bg-gray-700 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-500" />
                   </div>
                 </div>
               ))}

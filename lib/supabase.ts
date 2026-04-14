@@ -20,6 +20,8 @@ export interface DailyCheckin {
   achilles_pain: number | null;
   feeling: FeelingType | null;
   notes: string | null;
+  ai_coach_title: string | null;
+  ai_coach_description: string | null;
   created_at: string;
 }
 
@@ -40,7 +42,9 @@ export interface UserProfile {
   races: { id: string; name: string; date: string; distance: string; emoji: string }[] | null;
   plan_start: string | null;
   target_race: string | null;
+  race_date: string | null;
   custom_plan: CustomPlanDay[] | null;
+  created_at?: string;
 }
 
 export interface CustomPlanDay {

@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Training Tracker',
-  description: 'Personal marathon training tracker — 31 weeks to Athens',
+  title: 'Dromos',
+  description: 'Personal training tracker — AI-powered coaching for your goals',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Training Tracker',
+    title: 'Dromos',
   },
   other: {
     'mobile-web-app-capable': 'yes',

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase, DailyCheckin, FeelingType, UserProfile } from '@/lib/supabase';
-import { dateToString, getWorkoutForDate } from '@/lib/training-plan';
+import { dateToString, getWorkoutForDateWithProfile, PlanProfile } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 
 const FEELING_OPTIONS: { value: FeelingType; label: string; emoji: string; cls: string }[] = [
@@ -149,14 +149,26 @@ export default function CheckinPage() {
     }
 
     if (savedCheckin) {
-      const workout = getWorkoutForDate(new Date());
+      const planProfile: PlanProfile | null = profile ? {
+        goal: profile.goal,
+        daysPerWeek: profile.days_per_week ?? 4,
+        preferredLongDay: profile.preferred_long_day ?? 'Sat',
+        trainingLevel: profile.training_level ?? 'intermediate',
+        customPlan: profile.custom_plan ?? null,
+        raceDate: profile.race_date ?? null,
+        createdAt: profile.created_at ?? null,
+      } : null;
+      const workout = getWorkoutForDateWithProfile(new Date(), planProfile);
       fetch('/api/ai-coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plannedWorkout: workout, checkin: savedCheckin }),
-      }).then(r => r.json()).then(coach => {
-        if (coach.title) {
-          localStorage.setItem('ai_coach_today', JSON.stringify({ ...coach, date: todayStr }));
+      }).then(r => r.json()).then(async (coach) => {
+        if (coach.title && savedCheckin.id) {
+          await supabase.from('daily_checkins').update({
+            ai_coach_title: coach.title,
+            ai_coach_description: coach.description ?? '',
+          }).eq('id', savedCheckin.id);
         }
       }).catch(() => {});
     }

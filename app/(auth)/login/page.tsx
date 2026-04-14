@@ -34,7 +34,7 @@ export default function LoginPage() {
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
         </div>
-        <h1 className="text-white text-2xl font-bold">Training Tracker</h1>
+        <h1 className="text-white text-2xl font-bold">Dromos</h1>
         <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
       </div>
 
