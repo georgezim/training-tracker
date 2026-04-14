@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase, DailyCheckin, CompletedSession, UserProfile } from '@/lib/supabase';
 import CheckinModal from '@/components/CheckinModal';
 import {
@@ -93,6 +93,7 @@ function buildPlanProfile(profile: UserProfile): PlanProfile {
 export default function TodayPage() {
   const today = new Date();
   const todayStr = dateToString(today);
+  const checkinPrompted = useRef(false);
 
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [session, setSession] = useState<CompletedSession | null>(null);
@@ -229,12 +230,11 @@ export default function TodayPage() {
         setAiCoach({ title: ci.ai_coach_title, description: ci.ai_coach_description ?? '' });
       }
 
-      // Show checkin popup after 5am if not yet checked in
-      if (!ci) {
+      // Show checkin popup on every fresh load after 5am if not yet checked in today
+      if (!ci && !checkinPrompted.current) {
         const hour = new Date().getHours();
-        const promptKey = `checkin_prompted_${todayStr}`;
-        if (hour >= 5 && !localStorage.getItem(promptKey)) {
-          localStorage.setItem(promptKey, '1');
+        if (hour >= 5) {
+          checkinPrompted.current = true;
           setShowCheckinModal(true);
         }
       }
