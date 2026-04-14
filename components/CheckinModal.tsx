@@ -53,26 +53,30 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
       payload.sleep_hours = sleepHours;
     }
 
-    const { data } = await supabase
-      .from('daily_checkins')
-      .upsert(payload, { onConflict: 'user_id,date' })
-      .select().single();
+    try {
+      const { data } = await supabase
+        .from('daily_checkins')
+        .upsert(payload, { onConflict: 'user_id,date' })
+        .select().single();
 
-    if (data) {
-      const savedCheckin = data as DailyCheckin;
-      const workout = getWorkoutForDate(new Date());
-      fetch('/api/ai-coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plannedWorkout: workout, checkin: savedCheckin }),
-      }).then(r => r.json()).then(coach => {
-        if (coach.title) {
-          localStorage.setItem('ai_coach_today', JSON.stringify({ ...coach, date: todayStr }));
-        }
-      }).catch(() => {});
-      onSave(savedCheckin);
-    }
+      if (data) {
+        const savedCheckin = data as DailyCheckin;
+        fetch('/api/ai-coach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plannedWorkout: getWorkoutForDate(new Date()), checkin: savedCheckin }),
+        }).then(r => r.json()).then(coach => {
+          if (coach.title) {
+            localStorage.setItem('ai_coach_today', JSON.stringify({ ...coach, date: todayStr }));
+          }
+        }).catch(() => {});
+        onSave(savedCheckin);
+        return;
+      }
+    } catch {}
+    // Always dismiss even on error
     setSaving(false);
+    onDismiss();
   }
 
   return (
@@ -132,15 +136,18 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
               </div>
             )}
 
-            {/* Achilles */}
-            <div className="bg-gray-900 rounded-2xl p-4">
-              <div className="flex justify-between mb-2">
-                <span className="text-white text-sm font-semibold">Achilles Pain</span>
-                <span className="text-xl font-bold" style={{ color: achillesColor }}>{achilles}/10</span>
+            {/* Pain tracker — only if user has injury notes */}
+            {profile?.injury_notes && (
+              <div className="bg-gray-900 rounded-2xl p-4">
+                <div className="flex justify-between mb-2">
+                  <span className="text-white text-sm font-semibold">Pain Level</span>
+                  <span className="text-xl font-bold" style={{ color: achillesColor }}>{achilles}/10</span>
+                </div>
+                <input type="range" min={0} max={10} value={achilles} onChange={e => setAchilles(+e.target.value)}
+                  className="w-full" style={{ background: sliderBg(achillesColor, achilles, 0, 10) }} />
+                <p className="text-gray-600 text-xs mt-1">{profile.injury_notes}</p>
               </div>
-              <input type="range" min={0} max={10} value={achilles} onChange={e => setAchilles(+e.target.value)}
-                className="w-full" style={{ background: sliderBg(achillesColor, achilles, 0, 10) }} />
-            </div>
+            )}
 
             {/* Feeling */}
             <div>

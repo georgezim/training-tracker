@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase, CompletedSession } from '@/lib/supabase';
+import { supabase, CompletedSession, UserProfile } from '@/lib/supabase';
 import {
-  getWorkoutForDate,
+  getWorkoutForDateWithProfile,
   getWorkoutDetail,
   getDaysInCurrentWeek,
   getWeekNumber,
@@ -14,6 +14,7 @@ import {
   COLOR_TEXT,
   WorkoutInfo,
   WorkoutDetail,
+  PlanProfile,
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
@@ -36,6 +37,7 @@ export default function WeekPage() {
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedDay, setSelectedDay] = useState<{ workout: WorkoutInfo; detail: WorkoutDetail; label: string } | null>(null);
 
   // Status action modal
@@ -46,10 +48,22 @@ export default function WeekPage() {
   // View reason
   const [viewReason, setViewReason] = useState<{ reason: string } | null>(null);
 
+  const planProfile: PlanProfile | null = profile ? {
+    goal: profile.goal,
+    daysPerWeek: profile.days_per_week ?? 4,
+    preferredLongDay: profile.preferred_long_day ?? 'Sat',
+    trainingLevel: profile.training_level ?? 'intermediate',
+  } : null;
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserId(user.id);
-    });
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (prof) setProfile(prof as UserProfile);
+    }
+    init();
   }, []);
 
   useEffect(() => {
@@ -168,7 +182,7 @@ export default function WeekPage() {
 
         {days.map((day, i) => {
           const dayStr = dateToString(day);
-          const workout = getWorkoutForDate(day);
+          const workout = getWorkoutForDateWithProfile(day, planProfile);
           const isToday = dayStr === todayStr;
           const session = getSession(dayStr, workout.type);
           const colorStrip = COLOR_BG[workout.color] ?? 'bg-gray-700';
@@ -247,7 +261,7 @@ export default function WeekPage() {
               <p className="text-gray-400 text-sm">Sessions completed</p>
               <p className="text-white font-bold text-sm">
                 {doneSessions} /{' '}
-                {days.filter((d) => getWorkoutForDate(d).type !== 'rest').length}
+                {days.filter((d) => getWorkoutForDateWithProfile(d, planProfile).type !== 'rest').length}
               </p>
             </div>
           </div>

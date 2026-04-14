@@ -185,13 +185,16 @@ export default function CheckinPage() {
             ticks={['3h', '5h', '7h', '9h', '12h']} />
         )}
 
-        <div>
-          <Slider label="Achilles Pain" value={achilles} min={0} max={10} unit="/10" tier={achillesTier} onChange={setAchilles}
-            ticks={['0 None', '5 Moderate', '10 Severe']} />
-          {achilles > 3 && (
-            <p className="text-red-400 text-xs mt-2 px-1">⚠️ Pain above 3/10 — consider reducing load. Ice post-session.</p>
-          )}
-        </div>
+        {profile?.injury_notes && (
+          <div>
+            <Slider label="Pain Level" value={achilles} min={0} max={10} unit="/10" tier={achillesTier} onChange={setAchilles}
+              ticks={['0 None', '5 Moderate', '10 Severe']} />
+            <p className="text-gray-600 text-xs mt-1 px-1">{profile.injury_notes}</p>
+            {achilles > 3 && (
+              <p className="text-red-400 text-xs mt-2 px-1">⚠️ Pain above 3/10 — consider reducing load. Ice post-session.</p>
+            )}
+          </div>
+        )}
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
           <label className="text-white font-semibold text-sm block mb-3">How are you feeling?</label>

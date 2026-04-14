@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { supabase, DailyCheckin, CompletedSession, UserProfile } from '@/lib/supabase';
 import CheckinModal from '@/components/CheckinModal';
 import {
-  getWorkoutForDate,
+  getWorkoutForDateWithProfile,
   getWorkoutDetail,
   getWeekNumber,
   getPhase,
   PHASE_NAMES,
   dateToString,
   COLOR_BG,
+  PlanProfile,
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
@@ -80,7 +81,6 @@ export default function TodayPage() {
   const today = new Date();
   const todayStr = dateToString(today);
 
-  const workout = getWorkoutForDate(today);
   const week = getWeekNumber(today);
   const phase = getPhase(week);
 
@@ -94,6 +94,14 @@ export default function TodayPage() {
   const [showMissedModal, setShowMissedModal] = useState(false);
   const [missedReason, setMissedReason] = useState('');
   const [showCheckinModal, setShowCheckinModal] = useState(false);
+
+  const planProfile: PlanProfile | null = profile ? {
+    goal: profile.goal,
+    daysPerWeek: profile.days_per_week ?? 4,
+    preferredLongDay: profile.preferred_long_day ?? 'Sat',
+    trainingLevel: profile.training_level ?? 'intermediate',
+  } : null;
+  const workout = getWorkoutForDateWithProfile(today, planProfile);
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   // Read Strava OAuth result from URL params
@@ -352,11 +360,11 @@ export default function TodayPage() {
         )}
 
         {/* ── Warnings ── */}
-        {checkin?.achilles_pain != null && checkin.achilles_pain > 3 && (
+        {profile?.injury_notes && checkin?.achilles_pain != null && checkin.achilles_pain > 3 && (
           <div className="bg-red-950 border border-red-700/60 rounded-xl px-4 py-3">
-            <p className="text-red-300 text-sm font-semibold">⚠️ Achilles Alert — {checkin.achilles_pain}/10</p>
+            <p className="text-red-300 text-sm font-semibold">⚠️ Pain Alert — {checkin.achilles_pain}/10</p>
             <p className="text-red-200/80 text-xs mt-1">
-              Consider reducing today's intensity. Ice after, do eccentric heel drops, and monitor carefully.
+              Consider reducing today's intensity. {profile.injury_notes}
             </p>
           </div>
         )}

@@ -603,3 +603,103 @@ export function isRunWorkout(type: string) { return type === 'run' || type === '
 export function isBikeWorkout(type: string) { return type === 'bike'; }
 export function isGymWorkout(type: string) { return type === 'gym' || type === 'strength'; }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Personalized Plans — goal-based workout templates
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PlanProfile {
+  goal: string | null;
+  daysPerWeek: number;
+  preferredLongDay: string; // 'Mon'...'Sun'
+  trainingLevel: string;
+}
+
+const REST: WorkoutInfo = { type: 'rest', label: 'Rest Day', description: 'Recovery — light walk, stretching, or complete rest', color: 'gray' };
+
+const FITNESS_WORKOUTS: WorkoutInfo[] = [
+  { type: 'run', label: 'Easy Run', description: '30-40min easy pace, conversational effort', color: 'blue' },
+  { type: 'gym', label: 'Strength Training', description: 'Full body circuit — squats, push-ups, rows, lunges. 40-45min', color: 'purple' },
+  { type: 'run', label: 'Interval Run', description: '5×3min at moderate pace with 2min walk recoveries', color: 'blue' },
+  { type: 'bike', label: 'Cross Training', description: 'Bike, swim, or elliptical. 40min steady effort', color: 'orange' },
+  { type: 'gym', label: 'Core & Mobility', description: 'Core circuit + flexibility work. 30min', color: 'purple' },
+];
+
+const WEIGHT_LOSS_WORKOUTS: WorkoutInfo[] = [
+  { type: 'run', label: 'Cardio Run', description: '30min with 1min fast bursts every 5min', color: 'blue' },
+  { type: 'gym', label: 'HIIT Circuit', description: '30min — burpees, jump squats, mountain climbers, rest/repeat', color: 'purple' },
+  { type: 'bike', label: 'Steady Cardio', description: '40min bike or swim at moderate effort', color: 'orange' },
+  { type: 'gym', label: 'Strength + Core', description: 'Compound lifts + core finisher. 40min', color: 'purple' },
+  { type: 'run', label: 'Tempo Walk/Jog', description: '40min alternating brisk walk and easy jog', color: 'blue' },
+];
+
+const LONG_SESSIONS: Record<string, WorkoutInfo> = {
+  get_fit:     { type: 'run', label: 'Long Run or Hike', description: '50-70min at easy pace — enjoy the outdoors', color: 'blue' },
+  lose_weight: { type: 'run', label: 'Long Walk / Easy Jog', description: '60min sustained easy effort — burn calories, build base', color: 'blue' },
+  other:       { type: 'run', label: 'Long Session', description: '50-60min easy activity of your choice', color: 'blue' },
+};
+
+const DAY_INDEX: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+/**
+ * Returns a 7-day workout schedule for non-marathon goals.
+ * Spreads `daysPerWeek` workouts across the week with the long session
+ * placed on `preferredLongDay`.
+ */
+function buildWeeklySchedule(profile: PlanProfile): (WorkoutInfo | null)[] {
+  const schedule: (WorkoutInfo | null)[] = [null, null, null, null, null, null, null];
+  const goal = profile.goal ?? 'get_fit';
+  const workouts = goal === 'lose_weight' ? WEIGHT_LOSS_WORKOUTS : FITNESS_WORKOUTS;
+  const longSession = LONG_SESSIONS[goal] ?? LONG_SESSIONS['other'];
+  const longDayIdx = DAY_INDEX[profile.preferredLongDay] ?? 5;
+  const daysPerWeek = Math.min(Math.max(profile.daysPerWeek, 2), 7);
+
+  // Place long session first
+  schedule[longDayIdx] = longSession;
+  let placed = 1;
+
+  // Spread remaining workouts evenly, skipping the long-day
+  const available = Array.from({ length: 7 }, (_, i) => i).filter(i => i !== longDayIdx);
+  // Prefer spacing: every other day when possible
+  const spacing = Math.max(1, Math.floor(7 / daysPerWeek));
+  let workoutIdx = 0;
+  for (let i = 0; i < available.length && placed < daysPerWeek; i++) {
+    const dayIdx = available[i];
+    // Skip if too close to another placed workout (prefer spacing)
+    const prevPlaced = schedule.findIndex((s, j) => j < dayIdx && s !== null);
+    const nextPlaced = schedule.findIndex((s, j) => j > dayIdx && s !== null);
+    const okSpacing =
+      (prevPlaced === -1 || dayIdx - prevPlaced >= spacing - 1) &&
+      (nextPlaced === -1 || nextPlaced - dayIdx >= spacing - 1);
+    if (okSpacing || placed === daysPerWeek - 1) {
+      schedule[dayIdx] = workouts[workoutIdx % workouts.length];
+      workoutIdx++;
+      placed++;
+    }
+  }
+  // Fill any remaining if spacing was too strict
+  for (let i = 0; i < available.length && placed < daysPerWeek; i++) {
+    const dayIdx = available[i];
+    if (schedule[dayIdx] === null) {
+      schedule[dayIdx] = workouts[workoutIdx % workouts.length];
+      workoutIdx++;
+      placed++;
+    }
+  }
+
+  return schedule;
+}
+
+/**
+ * Profile-aware workout: returns the workout for `date` based on user's goal.
+ * Marathon/half-marathon uses the existing 31-week periodized plan.
+ * Other goals use a rotating weekly template.
+ */
+export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile | null): WorkoutInfo {
+  if (!profile || !profile.goal || profile.goal === 'marathon' || profile.goal === 'half_marathon') {
+    return getWorkoutForDate(date);
+  }
+  const schedule = buildWeeklySchedule(profile);
+  const dayOfWeek = (date.getDay() + 6) % 7; // 0=Mon
+  return schedule[dayOfWeek] ?? REST;
+}
+

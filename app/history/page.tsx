@@ -44,15 +44,19 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from('daily_checkins')
-      .select('*')
-      .order('date', { ascending: false })
-      .limit(90)
-      .then(({ data }) => {
-        if (data) setCheckins(data as DailyCheckin[]);
-        setLoading(false);
-      });
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      const { data } = await supabase
+        .from('daily_checkins')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(90);
+      if (data) setCheckins(data as DailyCheckin[]);
+      setLoading(false);
+    }
+    load();
   }, []);
 
   if (loading) {
@@ -130,6 +134,9 @@ export default function HistoryPage() {
                 )}
                 {ci.sleep_score != null && (
                   <Badge label="Sleep" value={`${ci.sleep_score}%`} t={tier(ci.sleep_score, 'sleep')} />
+                )}
+                {ci.sleep_hours != null && (
+                  <Badge label="Sleep" value={`${ci.sleep_hours}h`} t={ci.sleep_hours >= 7 ? 'green' : ci.sleep_hours >= 5.5 ? 'yellow' : 'red'} />
                 )}
                 {ci.achilles_pain != null && (
                   <Badge label="Achilles" value={`${ci.achilles_pain}/10`} t={tier(ci.achilles_pain, 'achilles')} />
