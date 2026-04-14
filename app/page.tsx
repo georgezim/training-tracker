@@ -260,7 +260,7 @@ export default function TodayPage() {
       >
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
-            <img src="/logo.jpeg" alt="Dromos" style={{ height: '28px', width: 'auto' }} />
+            <img src="/logo.png" alt="Dromos" className="w-9 h-9 rounded-xl object-cover" />
             <form action="/api/auth/logout" method="POST">
               <button type="submit" className="text-gray-500 text-xs px-2 py-1 hover:text-gray-300">Sign out</button>
             </form>

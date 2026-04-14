@@ -11,9 +11,10 @@
   "categories": ["health", "fitness", "sports"],
   "icons": [
     {
-      "src": "/logo.jpeg",
-      "sizes": "512x512",
-      "type": "image/jpeg"
+      "src": "/logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

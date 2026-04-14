@@ -29,12 +29,7 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="text-center mb-8">
-        <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto mb-4">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </div>
-        <img src="/logo.jpeg" alt="Dromos" style={{ height: '36px', width: 'auto', margin: '0 auto' }} />
+        <img src="/logo.png" alt="Dromos" className="w-20 h-20 rounded-2xl mx-auto mb-4 object-cover" />
         <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
       </div>
 
