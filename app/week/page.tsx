@@ -5,6 +5,7 @@ import { supabase, CompletedSession, UserProfile } from '@/lib/supabase';
 import {
   getWorkoutForDateWithProfile,
   getWorkoutDetail,
+  getWorkoutDuration,
   getDaysInCurrentWeek,
   getRacePlanInfo,
   dateToString,
@@ -52,6 +53,7 @@ export default function WeekPage() {
     customPlan: profile.custom_plan ?? null,
     raceDate: profile.race_date ?? null,
     createdAt: profile.created_at ?? null,
+    injuryNotes: profile.injury_notes ?? null,
   } : null;
 
   useEffect(() => {
@@ -221,9 +223,16 @@ export default function WeekPage() {
 
               {/* Workout info */}
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold truncate ${isToday ? 'text-white' : 'text-gray-100'}`}>
-                  {workout.label}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-sm font-semibold truncate ${isToday ? 'text-white' : 'text-gray-100'}`}>
+                    {workout.label}
+                  </p>
+                  {getWorkoutDuration(workout) && (
+                    <span className="flex-shrink-0 text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded-md">
+                      {getWorkoutDuration(workout)}
+                    </span>
+                  )}
+                </div>
                 <p className={`text-xs truncate mt-0.5 ${colorText}`}>
                   {workout.description.length > 55
                     ? workout.description.slice(0, 55) + '…'

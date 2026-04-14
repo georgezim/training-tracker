@@ -603,6 +603,38 @@ export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile |
   return schedule[dayOfWeek] ?? REST_DAY;
 }
 
+// ─── Workout duration (used in week cards and detail sheet) ──────────────────
+
+export function getWorkoutDuration(workout: WorkoutInfo): string {
+  if (workout.type === 'rest') return '';
+  if (workout.type === 'race') return 'All day';
+
+  if (workout.type === 'run') {
+    const kmMatch = workout.label.match(/(\d+(\.\d+)?)\s*km/i)
+      ?? workout.description.match(/(\d+(\.\d+)?)\s*km/i);
+    if (kmMatch) {
+      const km = parseFloat(kmMatch[1]);
+      const isTempo = workout.label.includes('Tempo') || workout.label.includes('Race Pace') || workout.label.includes('Interval');
+      const mins = Math.round(km * (isTempo ? 5.5 : 7));
+      return `~${mins} min`;
+    }
+    return '~45 min';
+  }
+
+  if (workout.type === 'gym') {
+    return workout.label.includes('+ Easy Run') ? '~80 min' : '~55 min';
+  }
+
+  if (workout.type === 'bike') {
+    const minMatch = workout.description.match(/(\d+)\s*min/i)
+      ?? workout.label.match(/(\d+)\s*min/i);
+    if (minMatch) return `~${minMatch[1]} min`;
+    return '~45 min';
+  }
+
+  return '~45 min';
+}
+
 // ─── Workout detail (structured breakdown for detail sheet) ──────────────────
 
 // Parse a Gemini-generated gym description into warm-up and exercise list
