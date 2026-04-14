@@ -17,6 +17,7 @@ import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import StravaActivityCard from '@/components/StravaActivityCard';
 import AiCoachCard from '@/components/AiCoachCard';
 import { useStravaActivity } from '@/lib/useStravaActivity';
+import AvatarCropModal from '@/components/AvatarCropModal';
 
 const FEELING_EMOJI: Record<string, string> = {
   great: '🟢',
@@ -103,6 +104,7 @@ export default function TodayPage() {
   const [missedReason, setMissedReason] = useState('');
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -268,11 +270,18 @@ export default function TodayPage() {
     setToggling(false);
   }
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleAvatarSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
-    const ext = file.name.split('.').pop();
-    const path = `${userId}/avatar.${ext}`;
+    if (file) setCropFile(file);
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+  }
+
+  async function handleAvatarCropped(blob: Blob) {
+    setCropFile(null);
+    if (!userId) return;
+    const path = `${userId}/avatar.jpg`;
+    const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
     const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
     if (uploadError) { console.error('Avatar upload failed:', uploadError); return; }
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
@@ -675,7 +684,7 @@ export default function TodayPage() {
                 </div>
                 <label className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-400">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} />
                 </label>
               </div>
               <div className="text-center">
@@ -700,6 +709,12 @@ export default function TodayPage() {
               </div>
             </div>
 
+            {/* Personal Details */}
+            <a href="/settings" onClick={() => setShowProfile(false)}
+              className="w-full py-3 rounded-xl bg-gray-800 text-gray-300 font-semibold text-sm text-center block">
+              ✏️ Personal Details
+            </a>
+
             {/* Sign out */}
             <form action="/api/auth/logout" method="POST">
               <button type="submit" className="w-full py-3 rounded-xl bg-red-900/40 text-red-300 border border-red-700/30 font-bold text-sm active:scale-95 transition-transform">
@@ -708,6 +723,14 @@ export default function TodayPage() {
             </form>
           </div>
         </>
+      )}
+
+      {cropFile && (
+        <AvatarCropModal
+          imageFile={cropFile}
+          onConfirm={handleAvatarCropped}
+          onCancel={() => setCropFile(null)}
+        />
       )}
     </div>
   );

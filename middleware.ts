@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/signup', '/landing', '/api/'];
+const PUBLIC_PATHS = ['/login', '/signin', '/signup', '/landing', '/api/'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -33,7 +33,7 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     const url = request.nextUrl.clone();
-    url.pathname = pathname === '/' ? '/landing' : '/login';
+    url.pathname = pathname === '/' ? '/landing' : '/signin';
     return NextResponse.redirect(url);
   }
 

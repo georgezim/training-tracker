@@ -516,7 +516,27 @@ function buildWeeklySchedule(profile: PlanProfile): (WorkoutInfo | null)[] {
  * - No profile: returns a generic rest day
  */
 export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile | null): WorkoutInfo {
-  if (!profile || !profile.goal) {
+  if (!profile) {
+    return REST_DAY;
+  }
+
+  // If no goal but has a custom plan, use it as a general fitness plan
+  if (!profile.goal && profile.customPlan && Array.isArray(profile.customPlan) && profile.customPlan.length === 7) {
+    const dayOfWeek = getDayOfWeek(date);
+    const dayPlan = profile.customPlan[dayOfWeek];
+    if (dayPlan) {
+      const validTypes: WorkoutType[] = ['run', 'gym', 'bike', 'rest', 'race'];
+      const validColors = ['blue', 'purple', 'orange', 'gray', 'red'];
+      return {
+        type: (validTypes.includes(dayPlan.type as WorkoutType) ? dayPlan.type : 'rest') as WorkoutType,
+        label: dayPlan.label || 'Workout',
+        description: dayPlan.description || '',
+        color: (validColors.includes(dayPlan.color) ? dayPlan.color : 'gray') as WorkoutInfo['color'],
+      };
+    }
+  }
+
+  if (!profile.goal) {
     return REST_DAY;
   }
 

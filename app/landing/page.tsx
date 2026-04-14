@@ -7,7 +7,7 @@ export default function LandingPage() {
       <header className="px-6 py-5 flex items-center justify-between max-w-5xl mx-auto w-full">
         <img src="/logo.png" alt="Dromos" className="w-10 h-10 rounded-xl object-cover" />
         <div className="flex items-center gap-3">
-          <Link href="/login" className="text-gray-400 text-sm font-medium hover:text-white transition-colors">
+          <Link href="/signin" className="text-gray-400 text-sm font-medium hover:text-white transition-colors">
             Sign in
           </Link>
           <Link href="/signup" className="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-blue-500 transition-colors">
@@ -32,7 +32,7 @@ export default function LandingPage() {
           <Link href="/signup" className="flex-1 py-4 rounded-2xl bg-blue-600 text-white font-bold text-base text-center hover:bg-blue-500 transition-colors">
             Start for free →
           </Link>
-          <Link href="/login" className="flex-1 py-4 rounded-2xl bg-gray-800 text-gray-300 font-bold text-base text-center hover:bg-gray-700 transition-colors">
+          <Link href="/signin" className="flex-1 py-4 rounded-2xl bg-gray-800 text-gray-300 font-bold text-base text-center hover:bg-gray-700 transition-colors">
             Sign in
           </Link>
         </div>

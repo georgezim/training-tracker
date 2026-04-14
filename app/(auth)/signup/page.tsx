@@ -232,7 +232,7 @@ export default function SignupPage() {
           </button>
           <p className="text-center text-gray-500 text-sm">
             Have an account?{' '}
-            <Link href="/login" className="text-blue-400 font-medium">Sign in</Link>
+            <Link href="/signin" className="text-blue-400 font-medium">Sign in</Link>
           </p>
         </form>
       )}
