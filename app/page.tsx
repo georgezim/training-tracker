@@ -105,6 +105,7 @@ export default function TodayPage() {
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -280,13 +281,18 @@ export default function TodayPage() {
   async function handleAvatarCropped(blob: Blob) {
     setCropFile(null);
     if (!userId) return;
-    const path = `${userId}/avatar.jpg`;
-    const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-    if (uploadError) { console.error('Avatar upload failed:', uploadError); return; }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
-    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
-    setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : prev);
+    setAvatarUploading(true);
+    try {
+      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/avatar', { method: 'POST', body: formData });
+      const json = await res.json();
+      if (!res.ok) { console.error('Avatar upload failed:', json.error); return; }
+      setProfile(prev => prev ? { ...prev, avatar_url: json.url } : prev);
+    } finally {
+      setAvatarUploading(false);
+    }
   }
 
   const bgClass = COLOR_BG[workout.color] ?? 'bg-gray-700';
@@ -677,9 +683,11 @@ export default function TodayPage() {
             <div className="flex flex-col items-center gap-3 py-2">
               <div className="relative">
                 <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden">
-                  {profile?.avatar_url
-                    ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                    : <span className="text-white text-3xl font-bold">{profile?.name?.charAt(0)?.toUpperCase() ?? '?'}</span>
+                  {avatarUploading
+                    ? <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                    : profile?.avatar_url
+                      ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                      : <span className="text-white text-3xl font-bold">{profile?.name?.charAt(0)?.toUpperCase() ?? '?'}</span>
                   }
                 </div>
                 <label className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-400">
