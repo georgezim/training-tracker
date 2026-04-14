@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) on your phone or browser.
+Open [https://dromosrun.app](https://dromosrun.app) on your phone or browser (or `http://localhost:3000` during local development).
 
 ### 3. Add to Home Screen (PWA)
 
