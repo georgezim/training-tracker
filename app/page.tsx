@@ -86,6 +86,7 @@ function buildPlanProfile(profile: UserProfile): PlanProfile {
     customPlan: profile.custom_plan ?? null,
     raceDate: profile.race_date ?? null,
     createdAt: profile.created_at ?? null,
+    injuryNotes: profile.injury_notes ?? null,
   };
 }
 

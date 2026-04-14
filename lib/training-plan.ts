@@ -55,6 +55,7 @@ export interface PlanProfile {
   customPlan?: CustomPlanDay[] | null;
   raceDate?: string | null;       // YYYY-MM-DD
   createdAt?: string | null;      // profile created_at for default anchor
+  injuryNotes?: string | null;
 }
 
 // ─── Race schedule (from user's profile races, used for display only) ────────
@@ -604,85 +605,228 @@ export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile |
 
 // ─── Workout detail (structured breakdown for detail sheet) ──────────────────
 
+// Parse a Gemini-generated gym description into warm-up and exercise list
+function parseGymDescription(desc: string): { warmupDuration: string; exercises: string[] } {
+  const warmupMatch = desc.match(/warm[- ]?up\s+(\d+\s*min)/i);
+  const warmupDuration = warmupMatch ? warmupMatch[1] : '10min';
+  const workoutMatch = desc.match(/workout:\s*(.*)/i);
+  const exerciseStr = workoutMatch ? workoutMatch[1] : desc;
+  // Split on commas followed by a capital letter (new exercise name)
+  const exercises = exerciseStr
+    .split(/,\s+(?=[A-Z])/)
+    .map(e => e.trim())
+    .filter(Boolean);
+  return { warmupDuration, exercises };
+}
+
+// Goal-specific key points for each workout type
+function goalKeyPoints(goal: string | null, type: WorkoutType, hasAchilles: boolean): string[] {
+  const achillesTip = hasAchilles
+    ? 'Eccentric heel drops before finishing — lower on one foot, 4 sec down, 3×15 each leg'
+    : null;
+
+  if (type === 'gym') {
+    const base: string[] = (() => {
+      switch (goal) {
+        case 'marathon':
+        case 'half_marathon':
+        case '10k':
+          return [
+            'Strength work reduces injury risk and directly improves running economy',
+            'Focus on form over weight — quality reps build durable running muscles',
+            'Compound movements (squats, rows) transfer the most power to your running stride',
+          ];
+        case 'lose_weight':
+          return [
+            'Muscle tissue burns calories even at rest — every session raises your metabolism',
+            'Compound lifts burn more total energy than isolation exercises',
+            'Eat protein within 30 min of finishing to preserve muscle while losing fat',
+          ];
+        case 'get_fit':
+          return [
+            'Full-body strength builds functional fitness you\'ll feel in everyday life',
+            'Progressive overload: add one rep or a tiny bit of weight each week to keep improving',
+            'Rest 60-90 sec between sets — long enough to recover, short enough to keep heart rate up',
+          ];
+        default:
+          return [
+            'Prioritise sleep tonight — muscle repair and adaptation happen during deep sleep',
+            'Eat protein within 30min of finishing',
+          ];
+      }
+    })();
+    if (achillesTip) base.push(achillesTip);
+    return base;
+  }
+
+  if (type === 'run') {
+    switch (goal) {
+      case 'marathon':
+        return [
+          'Easy miles build the aerobic base that carries you through 42km',
+          'Run slower than feels necessary — true Zone 2 is conversational pace',
+          'Consistency over months beats any single hard session',
+        ];
+      case 'half_marathon':
+        return [
+          'These slow miles teach your body to burn fat efficiently — essential for half marathon',
+          'Keep effort easy: building endurance, not testing it today',
+          'Cadence ~170-180 steps/min reduces injury risk and improves efficiency',
+        ];
+      case '10k':
+        return [
+          'Aerobic base work makes race pace feel easier on race day',
+          'Stay relaxed: tall posture, low arm carry, light foot strike',
+          'Even 10K training is 80% easy running — this session is exactly right',
+        ];
+      case 'lose_weight':
+        return [
+          'Zone 2 running burns fat directly as its primary fuel source',
+          'The more you do this, the better your body gets at burning fat at higher intensities',
+          'Combine with strength sessions for the fastest body composition change',
+        ];
+      case 'get_fit':
+        return [
+          'Every run builds cardiovascular fitness and strengthens your heart',
+          'Easy = you can hold a full conversation without gasping',
+          'Consistency is everything — 3 easy runs/week beats one heroic one',
+        ];
+      default:
+        return [
+          'Easy means EASY — HR Zone 2, conversational pace',
+          'Focus on relaxed form: tall posture, low arm carry',
+        ];
+    }
+  }
+
+  if (type === 'bike') {
+    switch (goal) {
+      case 'lose_weight':
+        return [
+          'Cycling is low-impact and burns significant calories — perfect for fat loss without joint stress',
+          'Zone 2 is the fat-burning zone: you should be able to hold a conversation',
+          'Pair with strength sessions for the best metabolic effect',
+        ];
+      case 'marathon':
+      case 'half_marathon':
+      case '10k':
+        return [
+          'Active recovery on the bike flushes lactate and reduces muscle soreness',
+          'Zone 2 cycling builds aerobic base without the impact stress of running',
+        ];
+      default:
+        return [
+          'Zone 2 = conversational pace — if you can\'t talk, slow down',
+          'Low-impact cardio that builds fitness while letting your body recover',
+        ];
+    }
+  }
+
+  return [];
+}
+
 export function getWorkoutDetail(date: Date, profile?: PlanProfile | null): WorkoutDetail {
   const workout = getWorkoutForDateWithProfile(date, profile);
+  const goal = profile?.goal ?? null;
+  const hasAchilles = !!(profile?.injuryNotes?.toLowerCase().includes('achilles'));
 
-  // Generic detail based on workout type
   if (workout.type === 'race') {
     return {
       duration: 'All day',
       intensity: 'Race effort',
       steps: [
-        { icon: '🌅', title: 'Morning', detail: 'Wake up 3h before start. Eat your usual pre-run breakfast — nothing new today.' },
-        { icon: '👟', title: 'Warm-up', detail: '10min easy jog + 4 strides. Get the legs turning over.' },
-        { icon: '🏃', title: 'Race', detail: 'Start conservative, negative split. Don\'t go out too fast in the first 5km.' },
-        { icon: '🧊', title: 'Recovery', detail: 'Walk for 10-15min after finishing. Eat within 30min. Ice any sore spots.' },
+        { icon: '🌅', title: 'Race morning', detail: 'Wake up 3h before start. Eat your usual pre-race breakfast — nothing new today. Sip water, don\'t overdrink.' },
+        { icon: '👟', title: 'Warm-up', detail: '10–15min easy jog + 4–6 strides at race pace. Arrive at the start line warmed up, not cold.' },
+        { icon: '🏃', title: 'Race strategy', detail: 'Start 10–15 sec/km slower than goal pace for the first 5km. Negative split: finish faster than you started.' },
+        { icon: '🧊', title: 'Finish line', detail: 'Walk 10–15min immediately after. Eat within 30min (carbs + protein). Ice any sore spots tonight.' },
       ],
       keyPoints: [
-        'Trust the training — you have prepared for this',
-        'Start 10-15 sec/km slower than goal pace for the first 5km',
-        'Drink at every aid station even if not thirsty',
+        'Trust the training — everything has led to this',
+        'Start conservative, the second half is where races are won',
+        'Drink at every aid station even if you don\'t feel thirsty',
       ],
     };
   }
 
   if (workout.type === 'rest') {
+    const restKeyPoints: string[] = (() => {
+      switch (goal) {
+        case 'marathon':
+        case 'half_marathon':
+        case '10k':
+          return [
+            'Rest is where your body absorbs training — skipping it slows progress',
+            'Use today for light walking, stretching, or foam rolling only',
+          ];
+        case 'lose_weight':
+          return [
+            'Recovery days allow your metabolism to reset and muscle to repair',
+            'Light movement (walk, stretch) is fine — just avoid intensity',
+          ];
+        default:
+          return ['Rest is training — this is where you get stronger'];
+      }
+    })();
     return {
       duration: '—',
       intensity: 'Rest / Recovery',
       steps: [
         { icon: '😴', title: 'Rest', detail: workout.description },
-        { icon: '💧', title: 'Hydration', detail: 'Drink 2-3L water throughout the day.' },
+        { icon: '💧', title: 'Hydration & nutrition', detail: 'Drink 2–3L water today. Eat enough protein to support muscle repair.' },
+        { icon: '🧘', title: 'Optional', detail: '10–15min of light stretching or foam rolling is fine and helps recovery.' },
       ],
-      keyPoints: ['Rest is training — this is where you absorb your work'],
+      keyPoints: restKeyPoints,
     };
   }
 
   if (workout.type === 'run') {
+    const isTempo = workout.label.includes('Tempo') || workout.label.includes('Race Pace') || workout.label.includes('Interval');
+    const kmMatch = workout.label.match(/(\d+(\.\d+)?)\s*km/i);
+    const km = kmMatch ? parseFloat(kmMatch[1]) : null;
+    const estimatedMin = km ? Math.round(km * (isTempo ? 5.5 : 7)) : 45;
     return {
-      duration: workout.label.match(/(\d+)km/) ? `~${Math.round(parseInt(workout.label.match(/(\d+)km/)![1]) * 6.5)}min` : '~45min',
-      intensity: workout.label.includes('Tempo') || workout.label.includes('Race Pace') ? 'Moderate-Hard' : 'Easy — Zone 2',
+      duration: `~${estimatedMin}min`,
+      intensity: isTempo ? 'Moderate–Hard' : 'Easy — Zone 2',
       steps: [
-        { icon: '🚶', title: 'Warm-up', detail: '5min brisk walk to wake the legs up.' },
-        { icon: '🏃', title: 'Run', detail: workout.description },
-        { icon: '🚶', title: 'Cool-down', detail: '5min walk + stretching (calves, quads, hip flexors).' },
+        { icon: '🚶', title: 'Warm-up', detail: '5–10min brisk walk, then 5min easy jog before picking up pace. Don\'t skip — cold muscles get injured.' },
+        { icon: '🏃', title: workout.label, detail: workout.description },
+        { icon: '🚶', title: 'Cool-down', detail: '5min easy walk. Stretch calves, quads, hip flexors, and hamstrings while still warm.' },
+        ...(hasAchilles ? [{ icon: '🦵', title: 'Achilles care', detail: 'Eccentric heel drops: stand on a step, rise on both feet, lower slowly on one foot (4 sec down). 3×15 each leg.' }] : []),
       ],
-      keyPoints: [
-        'Easy means EASY — HR Zone 2, conversational pace',
-        'Focus on relaxed form: tall posture, low arm carry',
-      ],
+      keyPoints: goalKeyPoints(goal, 'run', false),
     };
   }
 
   if (workout.type === 'gym') {
+    const { warmupDuration, exercises } = parseGymDescription(workout.description);
+    const exerciseDetail = exercises.length > 1
+      ? exercises.map((e, i) => `${i + 1}. ${e}`).join('\n')
+      : workout.description;
     return {
-      duration: workout.label.includes('+ Easy Run') ? '75-90min' : '45-60min',
+      duration: workout.label.includes('+ Easy Run') ? '75–90min' : '45–60min',
       intensity: 'Strength',
       steps: [
-        { icon: '🔥', title: 'Strength', detail: workout.description },
-        { icon: '🦵', title: 'Eccentric heel drops', detail: '3 x 15 reps each leg. Stand on a step, rise on both feet, lower slowly on one (4 sec down).' },
-        { icon: '🧊', title: 'Post-session', detail: 'Eat protein within 30min. Ice any sore spots.' },
+        { icon: '🔥', title: `Warm-up — ${warmupDuration}`, detail: 'Dynamic warm-up: leg swings, hip circles, arm circles, 10 bodyweight squats, 10 glute bridges. Gets blood flowing and joints mobile.' },
+        { icon: '🏋️', title: 'Main workout', detail: exerciseDetail },
+        { icon: '🧘', title: 'Cool-down', detail: 'Foam roll quads, hamstrings, calves. Static stretches: 30 sec each. Eat protein within 30min.' },
+        ...(hasAchilles ? [{ icon: '🦵', title: 'Eccentric heel drops', detail: 'Stand on a step, rise on both feet, lower slowly on one foot (4 sec down). 3×15 each leg. Builds Achilles tendon resilience.' }] : []),
       ],
-      keyPoints: [
-        'Eccentric heel drops protect the Achilles — don\'t skip',
-        'Prioritise sleep tonight — recovery happens at night',
-      ],
+      keyPoints: goalKeyPoints(goal, 'gym', false),
     };
   }
 
   if (workout.type === 'bike') {
+    const minMatch = workout.description.match(/(\d+)\s*min/i);
+    const duration = minMatch ? `${minMatch[1]}min` : '45min';
     return {
-      duration: workout.description.match(/(\d+)min/) ? workout.description.match(/(\d+)min/)![1] + 'min' : '45min',
+      duration,
       intensity: 'Zone 2 — Aerobic',
       steps: [
-        { icon: '🚴', title: 'Warm-up', detail: '5min easy spinning.' },
-        { icon: '🎯', title: 'Zone 2 ride', detail: workout.description },
-        { icon: '🧘', title: 'Cool-down', detail: '5min easy, then stretch (hip flexors, quads, lower back).' },
+        { icon: '🚴', title: 'Warm-up', detail: '5min easy spinning at low resistance to warm up legs and elevate heart rate gradually.' },
+        { icon: '🎯', title: 'Main ride', detail: workout.description },
+        { icon: '🧘', title: 'Cool-down', detail: '5min easy, then stretch hip flexors, quads, and lower back while muscles are warm.' },
       ],
-      keyPoints: [
-        'Zone 2 = conversational pace',
-        'This session actively speeds up recovery from gym work',
-      ],
+      keyPoints: goalKeyPoints(goal, 'bike', false),
     };
   }
 
