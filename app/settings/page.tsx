@@ -332,7 +332,7 @@ export default function SettingsPage() {
         )}
       </main>
 
-      <BottomNav active="settings" />
+      <BottomNav active="today" />
     </div>
   );
 }
