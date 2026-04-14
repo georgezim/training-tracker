@@ -175,6 +175,24 @@ export default function SignupPage() {
     router.refresh();
   }
 
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-gray-950 flex flex-col items-center justify-center gap-6 z-50">
+        <img src="/logo.png" alt="Dromos" className="w-20 h-20 rounded-2xl object-cover animate-pulse" />
+        <div className="flex flex-col items-center gap-3">
+          <svg className="animate-spin w-10 h-10 text-blue-500" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+            <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          <p className="text-white font-bold text-lg">Building your plan…</p>
+          <p className="text-gray-500 text-sm text-center max-w-[220px]">
+            Your AI coach is creating a personalised training plan just for you
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-sm">
       {/* Header */}
