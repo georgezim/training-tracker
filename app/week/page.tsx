@@ -188,7 +188,21 @@ export default function WeekPage() {
           ))}
         </div>
 
-        {days.map((day, i) => {
+        {/* Plan not ready yet */}
+        {profile && !profile.custom_plan && (
+          <div className="rounded-2xl p-6 bg-gray-900 border border-gray-800 flex flex-col items-center gap-4 text-center mt-2">
+            <svg className="animate-spin w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+              <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <div>
+              <p className="text-white font-semibold text-base">Preparing your plan…</p>
+              <p className="text-gray-500 text-sm mt-1">Your AI coach is building sessions tailored to your goals. Check back in a moment.</p>
+            </div>
+          </div>
+        )}
+
+        {profile?.custom_plan && days.map((day, i) => {
           const dayStr = dateToString(day);
           const workout = getWorkoutForDateWithProfile(day, planProfile);
           const isToday = dayStr === todayStr;
@@ -269,7 +283,8 @@ export default function WeekPage() {
           );
         })}
 
-        {/* Weekly summary */}
+        {/* Weekly summary — only when plan is ready */}
+
         {!loading && (
           <div className="bg-gray-900 rounded-xl p-4 mt-2">
             <div className="flex items-center justify-between">

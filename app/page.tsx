@@ -107,6 +107,7 @@ export default function TodayPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [planGenerating, setPlanGenerating] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -198,6 +199,7 @@ export default function TodayPage() {
       // Fires in the background — does not block the UI
       if (prof && !prof.custom_plan) {
         console.log('[plan] No custom_plan found for user', user.id, '— triggering generate-plan');
+        setPlanGenerating(true);
         fetch('/api/generate-plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -218,7 +220,8 @@ export default function TodayPage() {
           })
           .catch(err => {
             console.error('[plan] generate-plan fetch failed:', err);
-          });
+          })
+          .finally(() => setPlanGenerating(false));
       }
 
       // Load AI coach from checkin record
@@ -383,8 +386,22 @@ export default function TodayPage() {
           </div>
         )}
 
+        {/* ── Plan Generating State ── */}
+        {planGenerating && (
+          <div className="rounded-2xl p-6 bg-gray-900 border border-gray-800 flex flex-col items-center gap-4 text-center">
+            <svg className="animate-spin w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+              <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <div>
+              <p className="text-white font-semibold text-base">Preparing your plan…</p>
+              <p className="text-gray-500 text-sm mt-1">Your AI coach is building sessions tailored to your goals and preferences</p>
+            </div>
+          </div>
+        )}
+
         {/* ── Workout Card ── */}
-        <div
+        {!planGenerating && <div
           className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
           onClick={() => setShowDetail(true)}
         >
@@ -439,7 +456,7 @@ export default function TodayPage() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* ── Goal-based plan notice for non-race users ── */}
         {profile && profile.goal && !['marathon', 'half_marathon', '10k'].includes(profile.goal) && (
