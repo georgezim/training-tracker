@@ -129,7 +129,7 @@ Reply with ONLY a valid JSON array, no markdown, no explanation:
     }
 
     console.log('[generate-plan] Calling Gemini — goal:', profile.goal, 'isRaceGoal:', isRaceGoal);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     console.log('[generate-plan] Gemini raw response (first 300 chars):', text.slice(0, 300));
