@@ -40,6 +40,15 @@ export interface UserProfile {
   races: { id: string; name: string; date: string; distance: string; emoji: string }[] | null;
   plan_start: string | null;
   target_race: string | null;
+  custom_plan: CustomPlanDay[] | null;
+}
+
+export interface CustomPlanDay {
+  day: string;   // 'Mon' | 'Tue' | ... | 'Sun'
+  type: string;  // 'run' | 'gym' | 'bike' | 'rest'
+  label: string;
+  description: string;
+  color: string; // 'blue' | 'purple' | 'orange' | 'gray'
 }
 
 export interface CompletedSession {

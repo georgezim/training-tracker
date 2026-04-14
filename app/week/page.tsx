@@ -53,6 +53,7 @@ export default function WeekPage() {
     daysPerWeek: profile.days_per_week ?? 4,
     preferredLongDay: profile.preferred_long_day ?? 'Sat',
     trainingLevel: profile.training_level ?? 'intermediate',
+    customPlan: profile.custom_plan ?? null,
   } : null;
 
   useEffect(() => {

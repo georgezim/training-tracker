@@ -100,6 +100,7 @@ export default function TodayPage() {
     daysPerWeek: profile.days_per_week ?? 4,
     preferredLongDay: profile.preferred_long_day ?? 'Sat',
     trainingLevel: profile.training_level ?? 'intermediate',
+    customPlan: profile.custom_plan ?? null,
   } : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
@@ -352,9 +353,14 @@ export default function TodayPage() {
         {/* ── Goal-based plan notice for non-marathon users ── */}
         {profile && profile.goal && !['marathon', 'half_marathon'].includes(profile.goal) && (
           <div className="bg-blue-950/50 border border-blue-800/40 rounded-xl px-4 py-3">
-            <p className="text-blue-300 text-sm font-semibold">✦ Your personalised plan is being built</p>
+            <p className="text-blue-300 text-sm font-semibold">
+              {profile.custom_plan ? '✦ Your AI-generated plan' : '✦ Your personalised plan'}
+            </p>
             <p className="text-blue-200/60 text-xs mt-1">
-              Based on your goal ({profile.goal_other ?? profile.goal?.replace('_', ' ')}) and {profile.days_per_week ?? 4} days/week, your AI coach will adapt each session daily after your check-in.
+              {profile.custom_plan
+                ? `Tailored for ${profile.goal_other ?? profile.goal?.replace('_', ' ')} · ${profile.days_per_week ?? 4} days/week · AI coach adapts daily after check-in`
+                : `Based on your goal (${profile.goal_other ?? profile.goal?.replace('_', ' ')}) and ${profile.days_per_week ?? 4} days/week. Complete a check-in to get AI coaching.`
+              }
             </p>
           </div>
         )}

@@ -29,6 +29,7 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
   const [achilles, setAchilles]     = useState(0);
   const [feeling, setFeeling]       = useState<FeelingType>('good');
   const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState('');
 
   const recoveryTier = whoop >= 70 ? '#22c55e' : whoop >= 33 ? '#facc15' : '#ef4444';
   const sleepTier    = sleep >= 70 ? '#22c55e' : sleep >= 50 ? '#facc15' : '#ef4444';
@@ -42,6 +43,7 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
 
   async function handleSave() {
     setSaving(true);
+    setError('');
     const payload: Record<string, unknown> = {
       user_id: userId, date: todayStr,
       achilles_pain: achilles, feeling,
@@ -54,10 +56,17 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
     }
 
     try {
-      const { data } = await supabase
+      const { data, error: upsertError } = await supabase
         .from('daily_checkins')
         .upsert(payload, { onConflict: 'user_id,date' })
         .select().single();
+
+      if (upsertError) {
+        console.error('Checkin save error:', upsertError);
+        setError(upsertError.message || 'Failed to save check-in');
+        setSaving(false);
+        return;
+      }
 
       if (data) {
         const savedCheckin = data as DailyCheckin;
@@ -73,10 +82,15 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
         onSave(savedCheckin);
         return;
       }
-    } catch {}
-    // Always dismiss even on error
-    setSaving(false);
-    onDismiss();
+
+      // No data and no error — shouldn't happen but handle gracefully
+      setError('No data returned — check-in may not have saved');
+      setSaving(false);
+    } catch (err) {
+      console.error('Checkin save exception:', err);
+      setError('Something went wrong. Please try again.');
+      setSaving(false);
+    }
   }
 
   return (
@@ -163,6 +177,12 @@ export default function CheckinModal({ profile, userId, todayStr, onSave, onDism
                 ))}
               </div>
             </div>
+
+            {error && (
+              <div className="bg-red-950/60 border border-red-700/40 rounded-xl px-3 py-2">
+                <p className="text-red-300 text-xs">{error}</p>
+              </div>
+            )}
 
             <button onClick={handleSave} disabled={saving}
               className="w-full py-4 rounded-2xl font-bold text-white text-base bg-blue-600 disabled:opacity-60 active:scale-95 transition-transform">

@@ -53,6 +53,7 @@ export default function CheckinPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   // Tracker users
   const [whoop, setWhoop]       = useState(70);
@@ -96,9 +97,10 @@ export default function CheckinPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setError('');
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
+    if (!user) { setSaving(false); setError('Not logged in — please sign in again.'); return; }
 
     const payload: Record<string, unknown> = {
       user_id:      user.id,
@@ -116,15 +118,34 @@ export default function CheckinPage() {
     }
 
     let savedCheckin: DailyCheckin | null = null;
-    if (existing) {
-      await supabase.from('daily_checkins').update(payload).eq('id', existing.id);
-      savedCheckin = { ...existing, ...payload } as DailyCheckin;
-    } else {
-      const { data } = await supabase
-        .from('daily_checkins')
-        .upsert(payload, { onConflict: 'user_id,date' })
-        .select().single();
-      if (data) { savedCheckin = data as DailyCheckin; setExisting(savedCheckin); }
+    try {
+      if (existing) {
+        const { error: updateError } = await supabase.from('daily_checkins').update(payload).eq('id', existing.id);
+        if (updateError) {
+          console.error('Checkin update error:', updateError);
+          setError(updateError.message || 'Failed to update check-in');
+          setSaving(false);
+          return;
+        }
+        savedCheckin = { ...existing, ...payload } as DailyCheckin;
+      } else {
+        const { data, error: upsertError } = await supabase
+          .from('daily_checkins')
+          .upsert(payload, { onConflict: 'user_id,date' })
+          .select().single();
+        if (upsertError) {
+          console.error('Checkin upsert error:', upsertError);
+          setError(upsertError.message || 'Failed to save check-in');
+          setSaving(false);
+          return;
+        }
+        if (data) { savedCheckin = data as DailyCheckin; setExisting(savedCheckin); }
+      }
+    } catch (err) {
+      console.error('Checkin save exception:', err);
+      setError('Something went wrong. Please try again.');
+      setSaving(false);
+      return;
     }
 
     if (savedCheckin) {
@@ -221,6 +242,12 @@ export default function CheckinPage() {
             className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-3 py-2.5 placeholder-gray-600 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
           />
         </div>
+
+        {error && (
+          <div className="bg-red-950/60 border border-red-700/40 rounded-xl px-4 py-3">
+            <p className="text-red-300 text-sm">{error}</p>
+          </div>
+        )}
 
         <button type="submit" disabled={saving}
           className={`w-full py-4 rounded-2xl font-bold text-white text-base transition-all active:scale-95 ${

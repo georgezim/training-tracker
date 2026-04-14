@@ -607,11 +607,20 @@ export function isGymWorkout(type: string) { return type === 'gym' || type === '
 // Personalized Plans — goal-based workout templates
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface CustomPlanDay {
+  day: string;
+  type: string;
+  label: string;
+  description: string;
+  color: string;
+}
+
 export interface PlanProfile {
   goal: string | null;
   daysPerWeek: number;
   preferredLongDay: string; // 'Mon'...'Sun'
   trainingLevel: string;
+  customPlan?: CustomPlanDay[] | null;
 }
 
 const REST: WorkoutInfo = { type: 'rest', label: 'Rest Day', description: 'Recovery — light walk, stretching, or complete rest', color: 'gray' };
@@ -691,13 +700,32 @@ function buildWeeklySchedule(profile: PlanProfile): (WorkoutInfo | null)[] {
 
 /**
  * Profile-aware workout: returns the workout for `date` based on user's goal.
+ * If a Gemini-generated custom plan exists, use it.
  * Marathon/half-marathon uses the existing 31-week periodized plan.
- * Other goals use a rotating weekly template.
+ * Other goals fall back to a rotating weekly template.
  */
 export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile | null): WorkoutInfo {
   if (!profile || !profile.goal || profile.goal === 'marathon' || profile.goal === 'half_marathon') {
     return getWorkoutForDate(date);
   }
+
+  // Use Gemini-generated custom plan if available
+  if (profile.customPlan && Array.isArray(profile.customPlan) && profile.customPlan.length === 7) {
+    const dayOfWeek = (date.getDay() + 6) % 7; // 0=Mon
+    const dayPlan = profile.customPlan[dayOfWeek];
+    if (dayPlan) {
+      const validTypes: WorkoutType[] = ['run', 'gym', 'bike', 'rest', 'race'];
+      const validColors = ['blue', 'purple', 'orange', 'gray', 'red'];
+      return {
+        type: (validTypes.includes(dayPlan.type as WorkoutType) ? dayPlan.type : 'rest') as WorkoutType,
+        label: dayPlan.label || 'Workout',
+        description: dayPlan.description || '',
+        color: (validColors.includes(dayPlan.color) ? dayPlan.color : 'gray') as WorkoutInfo['color'],
+      };
+    }
+  }
+
+  // Fall back to hardcoded templates
   const schedule = buildWeeklySchedule(profile);
   const dayOfWeek = (date.getDay() + 6) % 7; // 0=Mon
   return schedule[dayOfWeek] ?? REST;

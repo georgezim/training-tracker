@@ -121,7 +121,7 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      await supabase.from('profiles').upsert({
+      const profileData = {
         id: data.user.id,
         name,
         goal,
@@ -135,7 +135,23 @@ export default function SignupPage() {
         preferred_long_day: preferredDay,
         sleep_device:       sleepDevice,
         has_sleep_tracker:  sleepDevice !== 'none',
-      });
+      };
+
+      await supabase.from('profiles').upsert(profileData);
+
+      // Generate personalized training plan with Gemini (non-blocking for marathon)
+      if (goal !== 'marathon' && goal !== 'half_marathon') {
+        try {
+          await fetch('/api/generate-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: data.user.id, profile: profileData }),
+          });
+        } catch {
+          // Plan generation is best-effort — don't block signup
+          console.error('Plan generation failed, will use fallback templates');
+        }
+      }
     }
 
     router.push('/');
