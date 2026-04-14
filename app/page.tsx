@@ -190,20 +190,30 @@ export default function TodayPage() {
 
       // Auto-generate personalised plan for users who don't have one yet
       // (existing users pre-dating onboarding, or signup where Gemini timed out)
-      // Fires silently in the background — does not block the UI
+      // Fires in the background — does not block the UI
       if (prof && !prof.custom_plan) {
+        console.log('[plan] No custom_plan found for user', user.id, '— triggering generate-plan');
         fetch('/api/generate-plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id, profile: prof }),
         })
-          .then(r => r.json())
-          .then(data => {
+          .then(async r => {
+            const data = await r.json();
+            if (!r.ok) {
+              console.error('[plan] generate-plan API error', r.status, data);
+              return;
+            }
             if (data.plan) {
+              console.log('[plan] Plan generated successfully — updating profile state');
               setProfile(prev => prev ? { ...prev, custom_plan: data.plan } : prev);
+            } else {
+              console.warn('[plan] generate-plan returned no plan:', data);
             }
           })
-          .catch(() => { /* silent — will retry on next visit */ });
+          .catch(err => {
+            console.error('[plan] generate-plan fetch failed:', err);
+          });
       }
 
       // Load AI coach from checkin record

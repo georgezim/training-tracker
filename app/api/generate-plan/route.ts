@@ -20,6 +20,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing userId or profile' }, { status: 400 });
     }
 
+    // ── Env var check ────────────────────────────────────────────────────────
+    const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+    const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+    console.log('[generate-plan] START', {
+      userId,
+      goal: profile.goal,
+      hasGeminiKey,
+      hasServiceKey,
+      hasSupabaseUrl,
+    });
+
+    if (!hasGeminiKey) {
+      console.error('[generate-plan] MISSING GEMINI_API_KEY');
+      return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 });
+    }
+    if (!hasServiceKey) {
+      console.error('[generate-plan] MISSING SUPABASE_SERVICE_ROLE_KEY');
+      return NextResponse.json({ error: 'Supabase service role key not configured' }, { status: 500 });
+    }
+
     const goalLabel = profile.goal === 'other'
       ? (profile.goal_other || 'general fitness')
       : (profile.goal?.replace(/_/g, ' ') || 'general fitness');
@@ -107,9 +128,11 @@ Reply with ONLY a valid JSON array, no markdown, no explanation:
 ]`;
     }
 
+    console.log('[generate-plan] Calling Gemini — goal:', profile.goal, 'isRaceGoal:', isRaceGoal);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
+    console.log('[generate-plan] Gemini raw response (first 300 chars):', text.slice(0, 300));
 
     // Extract JSON from the response (handle potential markdown wrapping)
     let jsonStr = text;
@@ -118,12 +141,20 @@ Reply with ONLY a valid JSON array, no markdown, no explanation:
       jsonStr = jsonMatch[0];
     }
 
-    const plan = JSON.parse(jsonStr);
+    let plan;
+    try {
+      plan = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error('[generate-plan] JSON parse failed. Raw text:', text);
+      throw new Error(`JSON parse error: ${parseErr}`);
+    }
 
     // Validate the plan structure
     if (!Array.isArray(plan) || plan.length !== 7) {
-      throw new Error('Invalid plan structure — expected 7 days');
+      console.error('[generate-plan] Invalid plan length:', plan?.length, JSON.stringify(plan).slice(0, 200));
+      throw new Error(`Invalid plan structure — expected 7 days, got ${plan?.length}`);
     }
+    console.log('[generate-plan] Plan parsed OK — days:', plan.map((d: Record<string, string>) => `${d.day}:${d.type}`).join(', '));
 
     const validTypes = ['run', 'gym', 'bike', 'rest'];
     const validColors = ['blue', 'purple', 'orange', 'gray'];
@@ -138,6 +169,7 @@ Reply with ONLY a valid JSON array, no markdown, no explanation:
     }));
 
     // Save to profile
+    console.log('[generate-plan] Saving plan to Supabase for user:', userId);
     const supabase = getSupabaseAdmin();
     const { error: updateError } = await supabase
       .from('profiles')
@@ -145,13 +177,15 @@ Reply with ONLY a valid JSON array, no markdown, no explanation:
       .eq('id', userId);
 
     if (updateError) {
-      console.error('Failed to save custom plan:', updateError);
-      return NextResponse.json({ error: 'Failed to save plan' }, { status: 500 });
+      console.error('[generate-plan] Supabase update failed:', updateError);
+      return NextResponse.json({ error: 'Failed to save plan', detail: updateError.message }, { status: 500 });
     }
 
+    console.log('[generate-plan] SUCCESS — plan saved for user:', userId);
     return NextResponse.json({ plan: cleanPlan });
   } catch (err) {
-    console.error('Generate plan error:', err);
-    return NextResponse.json({ error: 'Failed to generate plan' }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[generate-plan] FATAL ERROR:', msg);
+    return NextResponse.json({ error: 'Failed to generate plan', detail: msg }, { status: 500 });
   }
 }
