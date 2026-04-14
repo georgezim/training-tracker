@@ -62,7 +62,22 @@ export default function WeekPage() {
       if (!user) return;
       setUserId(user.id);
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (prof) setProfile(prof as UserProfile);
+      if (!prof) return;
+      setProfile(prof as UserProfile);
+
+      // If no plan yet, trigger generation and wait for it to resolve
+      if (!prof.custom_plan) {
+        fetch('/api/generate-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, profile: prof }),
+        })
+          .then(async r => {
+            const data = await r.json();
+            if (data.plan) setProfile(prev => prev ? { ...prev, custom_plan: data.plan } : prev);
+          })
+          .catch(() => {});
+      }
     }
     init();
   }, []);

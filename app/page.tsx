@@ -386,8 +386,8 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* ── Plan Generating State ── */}
-        {planGenerating && (
+        {/* ── Plan Generating State ── show whenever profile is loaded but plan isn't ready */}
+        {profile && !profile.custom_plan && (
           <div className="rounded-2xl p-6 bg-gray-900 border border-gray-800 flex flex-col items-center gap-4 text-center">
             <svg className="animate-spin w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
@@ -400,8 +400,8 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* ── Workout Card ── */}
-        {!planGenerating && <div
+        {/* ── Workout Card ── only show once plan is ready */}
+        {profile?.custom_plan && <div
           className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
           onClick={() => setShowDetail(true)}
         >
