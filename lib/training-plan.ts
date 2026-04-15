@@ -179,7 +179,15 @@ export function getRacePlanInfo(date: Date, profile?: PlanProfile | null): RaceP
     totalWeeks = defaultWeeksForGoal(profile.goal);
   }
 
-  const planStart = computePlanStart(raceDateStr, totalWeeks, profile.createdAt);
+  let planStart = computePlanStart(raceDateStr, totalWeeks, profile.createdAt);
+
+  // Clamp: plan must not start before the day after the user signed up
+  if (profile.createdAt) {
+    const signupTomorrow = new Date(new Date(profile.createdAt).getTime() + 24 * 60 * 60 * 1000);
+    const st = new Date(signupTomorrow.getFullYear(), signupTomorrow.getMonth(), signupTomorrow.getDate());
+    if (planStart < st) planStart = st;
+  }
+
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffMs = d.getTime() - planStart.getTime();
   const currentWeek = diffMs < 0 ? 0 : Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
