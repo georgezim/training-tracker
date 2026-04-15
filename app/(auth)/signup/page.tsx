@@ -156,19 +156,19 @@ export default function SignupPage() {
 
       await supabase.from('profiles').upsert(profileData);
 
-      // Generate personalised training plan with Gemini for ALL goals
-      // Race goals: Gemini generates the weekly activity structure (which days have which type)
-      // Non-race goals: Gemini generates the full plan with specific workout details
-      try {
-        await fetch('/api/generate-plan', {
+      // Generate plan and runway week in parallel — both best-effort, don't block signup
+      await Promise.allSettled([
+        fetch('/api/generate-plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: data.user.id, profile: profileData }),
-        });
-      } catch {
-        // Plan generation is best-effort — don't block signup
-        console.error('Plan generation failed, will use fallback templates');
-      }
+        }),
+        fetch('/api/generate-runway', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: data.user.id, profile: profileData }),
+        }),
+      ]);
     }
 
     router.push('/');
