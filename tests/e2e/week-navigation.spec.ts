@@ -8,13 +8,13 @@ test.describe('Scenario 6 — Week navigation limits', () => {
 
   test.beforeEach(async ({ page }) => {
     ({ userId, email, password } = await createTestUser('weeknav'));
-    await loginAs(page, email, password);
+    const token = await loginAs(page, email, password);
     await setupProfile(page, userId, {
       goal: 'marathon',
       training_level: 'intermediate',
       days_per_week: 4,
       preferred_activities: ['run'],
-    });
+    }, token);
   });
 
   test.afterEach(async () => { await deleteTestUser(userId); });

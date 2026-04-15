@@ -12,14 +12,14 @@ test.describe('Scenario 3 — Non-runner (bike + gym only)', () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     await backdateUser(userId, yesterday.toISOString());
-    await loginAs(page, email, password);
+    const token = await loginAs(page, email, password);
     await setupProfile(page, userId, {
       goal: 'marathon',
       training_level: 'intermediate',
       days_per_week: 4,
       preferred_activities: ['gym', 'bike'],
       equipment: ['gym', 'bike'],
-    });
+    }, token);
   });
 
   test.afterEach(async () => { await deleteTestUser(userId); });

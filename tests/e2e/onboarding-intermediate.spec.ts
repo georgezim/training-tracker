@@ -15,14 +15,14 @@ test.describe('Scenario 2 — Intermediate half marathon, Monday signup', () => 
     const lastMon = new Date(today);
     lastMon.setDate(today.getDate() - daysToLastMon);
     await backdateUser(userId, lastMon.toISOString());
-    await loginAs(page, email, password);
+    const token = await loginAs(page, email, password);
     await setupProfile(page, userId, {
       goal: 'half_marathon',
       training_level: 'intermediate',
       days_per_week: 4,
       preferred_activities: ['run', 'bike'],
       preferred_long_day: 'Sat',
-    });
+    }, token);
   });
 
   test.afterEach(async () => { await deleteTestUser(userId); });

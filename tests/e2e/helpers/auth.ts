@@ -8,7 +8,6 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-// Optional — enables admin operations (deleteUser, backdating created_at)
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export function getSupabaseAdmin() {
@@ -18,18 +17,11 @@ export function getSupabaseAdmin() {
   });
 }
 
-export function getSupabaseAnon() {
-  return createClient(SUPABASE_URL, ANON_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
 export async function createTestUser(emailPrefix = 'test') {
   const email = `${emailPrefix}+${Date.now()}@dromos.test`;
   const password = 'TestPassword123!';
 
   if (SERVICE_ROLE_KEY) {
-    // Admin path: create user with email pre-confirmed
     const admin = getSupabaseAdmin();
     const { data, error } = await admin.auth.admin.createUser({
       email,
@@ -40,82 +32,121 @@ export async function createTestUser(emailPrefix = 'test') {
     return { userId: data.user.id, email, password };
   }
 
-  // Public path: signUp (works when Supabase email confirmation is disabled)
-  const anon = getSupabaseAnon();
+  // Public path — works when Supabase email confirmation is disabled
+  const anon = createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
   const { data, error } = await anon.auth.signUp({ email, password });
   if (error) throw new Error(`signUp failed: ${error.message}`);
-  if (!data.user) throw new Error('signUp returned no user — email confirmation may be enabled. Add SUPABASE_SERVICE_ROLE_KEY to .env.local');
+  if (!data.user) throw new Error('signUp returned no user — email confirmation may be enabled; add SUPABASE_SERVICE_ROLE_KEY to .env.local');
   return { userId: data.user.id, email, password };
 }
 
 export async function deleteTestUser(userId: string) {
-  if (!SERVICE_ROLE_KEY) return; // Skip cleanup if no admin key — emails are unique by timestamp so no collision
+  if (!SERVICE_ROLE_KEY) return;
   const admin = getSupabaseAdmin();
   await admin.auth.admin.deleteUser(userId);
 }
 
-export async function loginAs(page: Page, email: string, password: string) {
+/**
+ * Log in via the UI and capture the Supabase access token from the auth response.
+ * Returns the access token so it can be passed to setupProfile().
+ */
+export async function loginAs(page: Page, email: string, password: string): Promise<string> {
+  let capturedToken = '';
+
+  // Intercept the Supabase /auth/v1/token response to capture the JWT
+  await page.route(`${SUPABASE_URL}/auth/v1/token*`, async (route) => {
+    const response = await route.fetch();
+    try {
+      const body = await response.json();
+      if (body.access_token) capturedToken = body.access_token;
+    } catch { /* ignore */ }
+    await route.fulfill({ response });
+  });
+
   await page.goto('/login');
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.pathname.includes('/login') && !url.pathname.includes('/signup'), { timeout: 15000 });
+  await page.waitForURL(
+    (url) => !url.pathname.includes('/login') && !url.pathname.includes('/signup'),
+    { timeout: 15000 }
+  );
+
+  await page.unroute(`${SUPABASE_URL}/auth/v1/token*`);
+  return capturedToken;
 }
 
 /**
- * Update a user's profile. Call AFTER loginAs() — uses the browser session
- * to make an authenticated Supabase REST call (RLS: user can update own profile).
+ * Update a user's profile using their session access token.
+ * Must be called AFTER loginAs().
  */
-export async function setupProfile(page: Page, userId: string, profileData: Record<string, unknown>) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-  // Extract the access token from the Supabase session cookie set by @supabase/ssr
-  const cookies = await page.context().cookies();
-  const authCookie = cookies.find(c => c.name.includes('auth-token'));
-  let accessToken: string | undefined;
-
-  if (authCookie) {
-    try {
-      const decoded = decodeURIComponent(authCookie.value);
-      const parsed = JSON.parse(decoded);
-      // @supabase/ssr stores session as array [session, expiry] or as object
-      accessToken = Array.isArray(parsed) ? parsed[0]?.access_token : parsed?.access_token;
-    } catch { /* ignore parse errors */ }
-  }
-
-  if (!accessToken && SERVICE_ROLE_KEY) {
-    // Fall back to admin client if cookie parsing failed
+export async function setupProfile(
+  _page: Page,
+  userId: string,
+  profileData: Record<string, unknown>,
+  accessToken?: string
+) {
+  // Prefer admin client if available (fastest path)
+  if (SERVICE_ROLE_KEY) {
     const admin = getSupabaseAdmin();
     const { error } = await admin.from('profiles').update(profileData).eq('id', userId);
-    if (error) throw new Error(`Profile setup failed: ${error.message}`);
+    if (error) throw new Error(`Profile setup (admin) failed: ${error.message}`);
     return;
   }
 
-  if (!accessToken) throw new Error('Could not get access token for profile setup. Ensure loginAs() was called first.');
+  if (!accessToken) {
+    throw new Error('accessToken required for setupProfile without SERVICE_ROLE_KEY. Pass the token returned by loginAs().');
+  }
 
-  const res = await page.request.patch(
-    `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`,
+  const res = await _page.request.patch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        apikey: anonKey,
+        apikey: ANON_KEY,
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
       data: profileData,
     }
   );
-  if (!res.ok()) throw new Error(`Profile setup REST call failed: ${res.status()} ${await res.text()}`);
+  if (!res.ok()) throw new Error(`Profile setup (REST) failed: ${res.status()} ${await res.text()}`);
 }
 
 /**
- * Backdate created_at on a user account.
- * Requires SUPABASE_SERVICE_ROLE_KEY — skipped silently if not available.
+ * Upsert a daily checkin using the user's session token.
+ */
+export async function upsertCheckin(
+  page: Page,
+  checkinData: Record<string, unknown>,
+  accessToken?: string
+) {
+  if (SERVICE_ROLE_KEY) {
+    const admin = getSupabaseAdmin();
+    await admin.from('daily_checkins').upsert(checkinData, { onConflict: 'user_id,date' });
+    return;
+  }
+  if (!accessToken) return;
+
+  await page.request.post(`${SUPABASE_URL}/rest/v1/daily_checkins`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: ANON_KEY,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    data: checkinData,
+  });
+}
+
+/**
+ * Backdate a user's created_at — requires admin key, silently skips if unavailable.
  */
 export async function backdateUser(userId: string, isoDateStr: string) {
-  if (!SERVICE_ROLE_KEY) return; // Skip silently — user stays with today's created_at
+  if (!SERVICE_ROLE_KEY) return;
   const admin = getSupabaseAdmin();
-  // @ts-ignore — created_at not in the public type but works via admin API
+  // @ts-ignore
   await admin.auth.admin.updateUserById(userId, { created_at: isoDateStr });
 }

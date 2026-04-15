@@ -18,7 +18,7 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
     const wednesdayStr = lastWed.toISOString();
 
     await backdateUser(userId, wednesdayStr);
-    await loginAs(page, email, password);
+    const token = await loginAs(page, email, password);
     await setupProfile(page, userId, {
       goal: 'marathon',
       training_level: 'beginner',
@@ -26,7 +26,7 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
       preferred_activities: ['run', 'gym'],
       preferred_long_day: 'Sat',
       equipment: ['outdoor_running', 'gym'],
-    });
+    }, token);
   });
 
   test.afterEach(async () => {

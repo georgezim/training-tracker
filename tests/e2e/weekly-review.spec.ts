@@ -12,7 +12,7 @@ test.describe('Scenario 7 — Weekly review API', () => {
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     await backdateUser(userId, twoWeeksAgo.toISOString());
-    await loginAs(page, email, password);
+    const token = await loginAs(page, email, password);
     await setupProfile(page, userId, {
       goal: 'marathon',
       training_level: 'intermediate',
@@ -27,7 +27,7 @@ test.describe('Scenario 7 — Weekly review API', () => {
         { day: 'Sat', type: 'run', label: 'Long Run', description: 'Long run', color: 'blue' },
         { day: 'Sun', type: 'rest', label: 'Rest', description: '', color: 'gray' },
       ],
-    });
+    }, token);
   });
 
   test.afterEach(async () => { await deleteTestUser(userId); });
