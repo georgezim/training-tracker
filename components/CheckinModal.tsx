@@ -89,6 +89,7 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, i
       if (data) {
         const savedCheckin = data as DailyCheckin;
         onSave(savedCheckin);
+        onDismiss();
 
         // Only call AI coach when:
         // 1. Not in the runway/preparation period

@@ -599,7 +599,7 @@ export function getWorkoutForDateWithProfile(date: Date, profile?: PlanProfile |
 
     const day = getDayOfWeek(date);
     const todayStr = dateToString(date);
-    const isRaceDay = todayStr === info.raceDate;
+    const isRaceDay = info.hasUserRaceDate && todayStr === info.raceDate;
 
     if (isRaceDay) {
       const goalLabel = profile.goal === 'marathon' ? 'Marathon' : profile.goal === 'half_marathon' ? 'Half Marathon' : '10K';

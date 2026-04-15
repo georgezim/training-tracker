@@ -98,8 +98,9 @@ RULES:
 - Total training days must equal ${profile.days_per_week || 4}. The rest are "rest" days.
 - The preferred long run day (${profile.preferred_long_day || 'Sat'}) MUST be "run" type (long run day)
 - Include at least 2 "run" days (1 easy + 1 long)
+- If "gym" is in preferred activities: include at least 1 "gym" day per week (MANDATORY)
 - Only include "bike" if cycling or swimming is in their preferred activities
-- Only include "gym" if strength is in their preferred activities
+- Only include "gym" if strength is in their preferred activities — if not preferred, use "rest" instead
 - Do NOT schedule 3 consecutive training days
 - Keep labels generic: "Run", "Long Run", "Strength", "Bike", "Swim", "Rest Day"
 - Keep descriptions to one short sentence
