@@ -296,6 +296,40 @@ export default function TodayPage() {
           .finally(() => setPlanGenerating(false));
       }
 
+      // Auto-generate runway plan for users in the preparation week who don't have one yet
+      // (accounts created before this feature, or where Gemini timed out during signup)
+      if (prof && !prof.runway_plan) {
+        const tempPlanProfile: PlanProfile = {
+          goal: prof.goal ?? null,
+          daysPerWeek: prof.days_per_week ?? 4,
+          preferredLongDay: prof.preferred_long_day ?? 'Sat',
+          trainingLevel: prof.training_level ?? 'intermediate',
+          createdAt: prof.created_at ?? null,
+        };
+        if (isInRunwayPeriod(today, tempPlanProfile)) {
+          console.log('[runway] No runway_plan found for user in runway —triggering generate-runway');
+          fetch('/api/generate-runway', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, profile: prof }),
+          })
+            .then(async r => {
+              const data = await r.json();
+              if (!r.ok) {
+                console.error('[runway] generate-runway API error', r.status, data);
+                return;
+              }
+              if (data.runway) {
+                console.log('[runway] Runway plan generated — updating profile state');
+                setProfile(prev => prev ? { ...prev, runway_plan: data.runway } : prev);
+              }
+            })
+            .catch(err => {
+              console.error('[runway] generate-runway fetch failed:', err);
+            });
+        }
+      }
+
       // Show checkin popup on every fresh load after 5am if not yet checked in today
       if (!ci && !checkinPrompted.current) {
         const hour = new Date().getHours();
