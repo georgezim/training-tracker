@@ -33,6 +33,7 @@ test.describe('Scenario 7 — Weekly review API', () => {
   test.afterEach(async () => { await deleteTestUser(userId); });
 
   test('review-week API returns valid action and multiplier', async ({ page }) => {
+    test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, 'Route requires SUPABASE_SERVICE_ROLE_KEY — returns 500 without it');
     // Use page.request to make authenticated POST (has session cookies)
     const response = await page.request.post('/api/review-week');
     expect(response.ok()).toBeTruthy();

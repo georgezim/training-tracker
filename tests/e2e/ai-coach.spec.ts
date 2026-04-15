@@ -29,11 +29,16 @@ test.describe('Scenario 5 — AI coach red metrics', () => {
   test('Green metrics — no AI badge shown', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    // Open check-in modal
-    const checkinBtn = page.getByRole('button', { name: /check.?in|morning/i });
-    if (await checkinBtn.isVisible({ timeout: 3000 })) {
-      await checkinBtn.click();
-      // Set green metrics (sliders default to 70)
+    // Modal may auto-open (page shows it when no checkin exists and hour >= 5)
+    const isModalOpen = await page.getByText('Morning Check-in').isVisible().catch(() => false);
+    if (!isModalOpen) {
+      const checkinBtn = page.getByRole('button', { name: '📋 Check in' });
+      if (await checkinBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await checkinBtn.click();
+      }
+    }
+    if (await page.getByText('Morning Check-in').isVisible({ timeout: 3000 }).catch(() => false)) {
+      // Sliders default to 70 (green) — just pick Good and save
       await page.locator('button:has-text("Great"), button:has-text("Good")').first().click();
       await page.getByRole('button', { name: /save check-in/i }).click();
       await page.waitForLoadState('networkidle');
@@ -44,6 +49,7 @@ test.describe('Scenario 5 — AI coach red metrics', () => {
   });
 
   test('Yellow metrics — tip shown, no AI badge', async ({ page }) => {
+    test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, 'Requires SUPABASE_SERVICE_ROLE_KEY to backdate user out of runway period');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     // Pre-seed a yellow checkin via the helper (uses token for RLS)

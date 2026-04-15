@@ -42,6 +42,7 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
   });
 
   test('Today tab shows OPTIONAL badge during runway', async ({ page }) => {
+    test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, 'Requires SUPABASE_SERVICE_ROLE_KEY to seed runway plan data');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     const optional = page.getByText('Optional');
