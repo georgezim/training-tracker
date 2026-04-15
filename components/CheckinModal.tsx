@@ -4,6 +4,18 @@ import { useState } from 'react';
 import { supabase, DailyCheckin, FeelingType, UserProfile } from '@/lib/supabase';
 import { getWorkoutForDateWithProfile, PlanProfile } from '@/lib/training-plan';
 
+function isRedCheckin(
+  whoop: number, sleep: number, sleepHours: number, achilles: number,
+  feeling: FeelingType, hasTracker: boolean, hasInjuryNotes: boolean
+): boolean {
+  if (hasTracker && whoop < 33) return true;
+  if (hasTracker && sleep < 33) return true;
+  if (!hasTracker && sleepHours < 6) return true;
+  if (hasInjuryNotes && achilles >= 4) return true;
+  if (feeling === 'bad' || feeling === 'injured') return true;
+  return false;
+}
+
 const FEELING_OPTIONS: { value: FeelingType; label: string; emoji: string; cls: string }[] = [
   { value: 'great',   label: 'Great',   emoji: '🟢', cls: 'bg-green-700 text-white border-green-600' },
   { value: 'good',    label: 'Good',    emoji: '🔵', cls: 'bg-blue-700 text-white border-blue-600' },
@@ -17,11 +29,13 @@ interface Props {
   planProfile: PlanProfile | null;
   userId: string;
   todayStr: string;
+  inRunway: boolean;
   onSave: (checkin: DailyCheckin) => void;
+  onAiResult?: (title: string, description: string) => void;
   onDismiss: () => void;
 }
 
-export default function CheckinModal({ profile, planProfile, userId, todayStr, onSave, onDismiss }: Props) {
+export default function CheckinModal({ profile, planProfile, userId, todayStr, inRunway, onSave, onAiResult, onDismiss }: Props) {
   const hasTracker = profile?.has_sleep_tracker ?? false;
 
   const [whoop, setWhoop]           = useState(70);
@@ -74,25 +88,35 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, o
 
       if (data) {
         const savedCheckin = data as DailyCheckin;
-        // Call AI coach and persist to Supabase
-        const workout = getWorkoutForDateWithProfile(new Date(), planProfile);
-        fetch('/api/ai-coach', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plannedWorkout: workout, checkin: savedCheckin }),
-        }).then(r => r.json()).then(async (coach) => {
-          if (coach.title) {
-            // Persist AI coach to the checkin record
-            await supabase.from('daily_checkins').update({
-              ai_coach_title: coach.title,
-              ai_coach_description: coach.description ?? '',
-            }).eq('id', savedCheckin.id);
-            // Update the returned checkin with AI coach data
-            savedCheckin.ai_coach_title = coach.title;
-            savedCheckin.ai_coach_description = coach.description ?? '';
-          }
-        }).catch(() => {});
         onSave(savedCheckin);
+
+        // Only call AI coach when:
+        // 1. Not in the runway/preparation period
+        // 2. Metrics are in the red zone (meaningful intervention needed)
+        const red = isRedCheckin(
+          whoop, sleep, sleepHours, achilles, feeling,
+          hasTracker, !!profile?.injury_notes
+        );
+
+        if (!inRunway && red) {
+          const workout = getWorkoutForDateWithProfile(new Date(), planProfile);
+          fetch('/api/ai-coach', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plannedWorkout: workout, checkin: savedCheckin }),
+          }).then(r => r.json()).then(async (coach) => {
+            if (coach.title) {
+              // Persist to daily_checkins
+              await supabase.from('daily_checkins').update({
+                ai_coach_title: coach.title,
+                ai_coach_description: coach.description ?? '',
+              }).eq('id', savedCheckin.id);
+              // Notify parent so the workout card updates immediately
+              onAiResult?.(coach.title, coach.description ?? '');
+            }
+          }).catch(() => {});
+        }
+
         return;
       }
 
