@@ -53,6 +53,7 @@ export interface UserProfile {
     multiplier: number;
     applied_at: string;
   } | null;
+  runway_plan: CustomPlanDay[] | null;
   created_at?: string;
 }
 
