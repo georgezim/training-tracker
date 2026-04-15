@@ -85,15 +85,17 @@ export const PHASE_NAMES: Record<number, string> = {
 
 /**
  * Compute the plan start date (Monday) anchored to signup date or race date.
+ * Rule: planStart is the first Monday STRICTLY after created_at.
+ * If created_at is itself a Monday, planStart = the following Monday (7 days later).
  */
 function computePlanStart(raceDateStr: string, totalWeeks: number, createdAt?: string | null): Date {
-  // Anchor to the Monday of the week the user signed up
   if (createdAt) {
     const created = new Date(createdAt);
     const d = new Date(created.getFullYear(), created.getMonth(), created.getDate());
-    const jsDay = d.getDay(); // 0=Sun
-    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
-    d.setDate(d.getDate() + mondayOffset);
+    const jsDay = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    // Days until next Monday: Mon=7, Tue=6, Wed=5, Thu=4, Fri=3, Sat=2, Sun=1
+    const daysUntilNextMonday = ((8 - jsDay) % 7) || 7;
+    d.setDate(d.getDate() + daysUntilNextMonday);
     return d;
   }
   // Fallback: compute backwards from race date
@@ -182,13 +184,6 @@ export function getRacePlanInfo(date: Date, profile?: PlanProfile | null): RaceP
 
   let planStart = computePlanStart(raceDateStr, totalWeeks, profile.createdAt);
 
-  // Clamp: plan must not start before the day after the user signed up
-  if (profile.createdAt) {
-    const signup = new Date(profile.createdAt);
-    const st = new Date(signup.getFullYear(), signup.getMonth(), signup.getDate() + 1);
-    if (planStart < st) planStart = st;
-  }
-
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffMs = d.getTime() - planStart.getTime();
   const currentWeek = diffMs < 0 ? 0 : Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
@@ -242,6 +237,31 @@ export function getWeekStart(date: Date): Date {
   const dayIdx = getDayOfWeek(d);
   d.setDate(d.getDate() - dayIdx);
   return d;
+}
+
+/**
+ * Returns the plan start date (first Monday strictly after profile.createdAt).
+ * Returns null if createdAt is not available on the profile.
+ */
+export function getPlanStart(profile: PlanProfile | null): Date | null {
+  if (!profile?.createdAt) return null;
+  const created = new Date(profile.createdAt);
+  const d = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+  const jsDay = d.getDay();
+  const daysUntilNextMonday = ((8 - jsDay) % 7) || 7;
+  d.setDate(d.getDate() + daysUntilNextMonday);
+  return d;
+}
+
+/**
+ * Returns true if `date` is before planStart — i.e., the user is still in their
+ * preparation/runway week and the real plan hasn't started yet.
+ */
+export function isInRunwayPeriod(date: Date, profile: PlanProfile | null): boolean {
+  const planStart = getPlanStart(profile);
+  if (!planStart) return false;
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return d < planStart;
 }
 
 // All 7 days (Mon–Sun) of the week containing `date`
