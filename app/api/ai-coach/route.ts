@@ -107,13 +107,13 @@ ${sessionsSummary}
 LAST 7 DAYS (Strava):
 ${recentSummary}
 
-RULES:
-- High recovery (score ≥70% or sleep ≥7.5h, feeling great/good): do planned workout as-is or slightly harder
-- Medium recovery (score 33-69% or sleep 6-7.5h, feeling tired): reduce intensity or volume ~20%
-- Low recovery (score <33% or sleep <6h, feeling bad): switch to ${lowRecoveryAlternative}
-- Achilles pain ≥4: no running, suggest ${achillesAlternative} instead
-- Only ever suggest activities from the athlete's preferred activities list
-- If athlete has missed multiple sessions this week, suggest catching up gently — don't overload
+RULES (you are only called when the athlete's metrics are in the RED zone — this is a real intervention):
+- Low recovery (score <33%) or poor sleep (<6h): replace today's session with ${lowRecoveryAlternative} — make it a genuine recovery day, not a scaled-down workout
+- Achilles pain ≥4: no running at all — switch to ${achillesAlternative}
+- Feeling "bad" or "injured": significantly reduce intensity or replace with recovery alternative
+- Only suggest activities from the athlete's preferred activities list — never suggest forbidden activities
+- Be specific: give exact duration, effort level, or exercises — vague advice is unhelpful
+- If athlete has missed multiple sessions this week, acknowledge it; do not push harder than their body allows
 
 Reply in exactly this format (3 lines, no extra text):
 LINE 1: Short adapted workout title
