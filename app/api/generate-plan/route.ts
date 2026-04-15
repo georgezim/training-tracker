@@ -103,7 +103,8 @@ RULES:
 - Do NOT schedule 3 consecutive training days
 - Keep labels generic: "Run", "Long Run", "Strength", "Bike", "Swim", "Rest Day"
 - Keep descriptions to one short sentence
-TRAINING LEVEL CONSTRAINTS for ${profile.training_level || 'intermediate'}:
+
+TRAINING LEVEL CONSTRAINTS for ${profile.training_level || 'intermediate'} — apply ONLY the matching rule:
 - beginner: Week 1 long run label must say "Easy Run — 4-5km". Easy run days are 20-30min. No more than 1 run day in weeks 1-2. Prioritise 1 rest day between every run day.
 - intermediate: Week 1 long run is 8-10km. Easy runs 40-50min.
 - advanced: Week 1 long run is 12-14km. Easy runs 50-60min. Can include tempo or intervals from week 3.
@@ -138,6 +139,8 @@ RULES:
 - Each workout type must be one of: "run", "gym", "bike", "rest"
 - Each workout color: "blue" (run), "purple" (gym), "orange" (bike/swim), "gray" (rest)
 - Swimming sessions: use type "bike", label "Swim", color "orange"
+
+TRAINING LEVEL CONSTRAINTS — apply ONLY the matching rule for ${profile.training_level || 'intermediate'}:
 - beginner: Run sessions max 30min or 4km. No session over 45min in week 1.
 - intermediate: Run sessions 40-55min or 6-9km.
 - advanced: Run sessions 50-70min or 8-15km. Can include intervals or tempo.
