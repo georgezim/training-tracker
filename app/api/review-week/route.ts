@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthUserId } from '@/lib/api-auth';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -20,11 +21,18 @@ function actionToMultiplier(action: string): number {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    const { userId } = await req.json();
+    const userId = await getAuthUserId();
     if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 });
+    }
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Supabase service role key not configured' }, { status: 500 });
     }
 
     const supabase = getSupabaseAdmin();
