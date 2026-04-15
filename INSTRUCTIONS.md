@@ -157,6 +157,18 @@ The AI coach (Gemini 1.5 Flash) adapts today's planned workout based on:
 
 ---
 
+## Code Quality Standards
+
+Own the codebase, don't just complete tasks.
+
+- If you encounter a pre-existing bug, broken build, or lint error while implementing — fix it or explicitly flag it for immediate follow-up. Never dismiss it as "pre-existing, not our problem."
+- The build must pass on Vercel. If `npm run build` fails for any reason, that is always our problem.
+- Missing environment variable guards are bugs. Any `process.env.X!` without a fallback or startup check that causes build or runtime failures must be fixed.
+- If a file you're editing has unrelated issues (type errors, dead code, broken imports), flag them even if you don't fix them. Silence is not acceptable.
+- When a task is complete, check the overall health of the files you touched — not just the lines you changed.
+
+---
+
 ## What NOT to Do
 
 - **Never hardcode a specific user's training plan dates.** All plan logic must be derived from the user's profile.

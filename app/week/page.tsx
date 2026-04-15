@@ -7,6 +7,7 @@ import {
   getWorkoutDetail,
   getWorkoutDuration,
   getDaysInCurrentWeek,
+  getWeekStart,
   getRacePlanInfo,
   dateToString,
   COLOR_BG,
@@ -35,6 +36,14 @@ export default function WeekPage() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  // Earliest week the user can navigate to — the week they signed up
+  const minWeekOffset = (() => {
+    if (!profile?.created_at) return 0;
+    const createdWeekStart = getWeekStart(new Date(profile.created_at));
+    const thisWeekStart = getWeekStart(today);
+    return Math.round((createdWeekStart.getTime() - thisWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  })();
   const [selectedDay, setSelectedDay] = useState<{ workout: WorkoutInfo; detail: WorkoutDetail; label: string } | null>(null);
 
   // Status action modal
@@ -165,7 +174,8 @@ export default function WeekPage() {
           <div className="flex items-center justify-between">
             <button
               onClick={() => setWeekOffset(w => w - 1)}
-              className="text-white/60 hover:text-white text-2xl leading-none px-1 active:scale-90 transition-transform"
+              disabled={weekOffset <= minWeekOffset}
+              className="text-2xl leading-none px-1 transition-transform disabled:opacity-20 disabled:cursor-not-allowed active:scale-90 text-white/60 hover:text-white disabled:hover:text-white/60"
               aria-label="Previous week"
             >‹</button>
 
