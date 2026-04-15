@@ -4,6 +4,8 @@ dotenv.config({ path: '.env.local' });
 
 export default defineConfig({
   testDir: './tests/e2e',
+  workers: 1,
+  timeout: 60000,
   use: {
     baseURL: 'http://localhost:3000',
     screenshot: 'only-on-failure',
@@ -11,6 +13,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000,
   },
 });

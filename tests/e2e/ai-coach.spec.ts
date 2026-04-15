@@ -21,6 +21,12 @@ test.describe('Scenario 5 — AI coach red metrics', () => {
       days_per_week: 4,
       preferred_activities: ['run'],
       has_sleep_tracker: true,
+      // profiles.created_at drives isInRunwayPeriod — must match the backdated auth.users date
+      created_at: twoWeeksAgo.toISOString(),
+      // Seed a plan so today is always a non-rest workout (needed for yellow tip visibility)
+      custom_plan: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => ({
+        day, type: 'run', label: 'Training Run', description: 'Easy run — adjust intensity by feel', color: 'blue',
+      })),
     }, token);
   });
 

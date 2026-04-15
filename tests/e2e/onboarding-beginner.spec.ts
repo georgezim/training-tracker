@@ -26,6 +26,14 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
       preferred_activities: ['run', 'gym'],
       preferred_long_day: 'Sat',
       equipment: ['outdoor_running', 'gym'],
+      // Seed runway_plan so the Optional badge renders on today's card
+      runway_plan: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((day, i) => ({
+        day,
+        type: [1, 3, 6].includes(i) ? 'rest' : 'run',
+        label: [1, 3, 6].includes(i) ? 'Rest Day' : 'Easy Run',
+        description: [1, 3, 6].includes(i) ? 'Rest and recover' : 'Easy 20–30 min run to build the habit',
+        color: [1, 3, 6].includes(i) ? 'gray' : 'blue',
+      })),
     }, token);
   });
 
@@ -42,7 +50,6 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
   });
 
   test('Today tab shows OPTIONAL badge during runway', async ({ page }) => {
-    test.skip(!process.env.SUPABASE_SERVICE_ROLE_KEY, 'Requires SUPABASE_SERVICE_ROLE_KEY to seed runway plan data');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     const optional = page.getByText('Optional');
