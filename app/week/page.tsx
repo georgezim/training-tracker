@@ -448,9 +448,9 @@ export default function WeekPage() {
           );
         })}
 
-        {/* Weekly summary — only when plan is ready */}
+        {/* Weekly summary — only when plan is ready and not in runway week */}
 
-        {!loading && (
+        {!loading && !isRunwayWeek && (
           <div className="bg-gray-900 rounded-xl p-4 mt-2">
             <div className="flex items-center justify-between">
               <p className="text-gray-400 text-sm">Sessions completed</p>
