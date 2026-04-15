@@ -258,6 +258,9 @@ export default function WeekPage() {
         {/* ── Runway week: show runway_plan days ── */}
         {isRunwayWeek && days.map((day, i) => {
           const dayStr = dateToString(day);
+          // Don't show runway cards for days before the user signed up
+          const createdAtStr = profile?.created_at ? dateToString(new Date(profile.created_at)) : null;
+          if (createdAtStr && dayStr < createdAtStr) return null;
           const isToday = dayStr === todayStr;
           const rwDay = runwayPlan ? runwayPlan[i] : null;
           const isActive = rwDay && rwDay.type !== 'rest';
