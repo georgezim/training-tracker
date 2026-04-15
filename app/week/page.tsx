@@ -68,10 +68,9 @@ export default function WeekPage() {
 
       // Monday trigger: run weekly review if today is Monday and it hasn't run yet this Monday.
       // Uses plan_adjustment.applied_at from the profile — no localStorage (breaks across devices).
-      const nowDate = new Date();
-      const isMonday = nowDate.getDay() === 1;
+      const isMonday = today.getDay() === 1;
       if (isMonday) {
-        const todayIso = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`;
+        const todayIso = dateToString(today);
         const lastApplied = (prof as UserProfile).plan_adjustment?.applied_at ?? '';
         const alreadyRanToday = lastApplied.startsWith(todayIso);
         if (!alreadyRanToday) {
@@ -86,7 +85,7 @@ export default function WeekPage() {
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
               if (updatedProf) setProfile(updatedProf as UserProfile);
             }
           }).catch(() => { /* silent — review is non-blocking */ });
