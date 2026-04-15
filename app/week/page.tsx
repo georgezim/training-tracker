@@ -54,6 +54,7 @@ export default function WeekPage() {
     raceDate: profile.race_date ?? null,
     createdAt: profile.created_at ?? null,
     injuryNotes: profile.injury_notes ?? null,
+    planAdjustment: profile.plan_adjustment?.multiplier ?? 1.0,
   } : null;
 
   useEffect(() => {
@@ -64,6 +65,33 @@ export default function WeekPage() {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (!prof) return;
       setProfile(prof as UserProfile);
+
+      // Monday trigger: run weekly review if today is Monday and it hasn't run yet this Monday.
+      // Uses plan_adjustment.applied_at from the profile — no localStorage (breaks across devices).
+      const nowDate = new Date();
+      const isMonday = nowDate.getDay() === 1;
+      if (isMonday) {
+        const todayIso = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`;
+        const lastApplied = (prof as UserProfile).plan_adjustment?.applied_at ?? '';
+        const alreadyRanToday = lastApplied.startsWith(todayIso);
+        if (!alreadyRanToday) {
+          fetch('/api/review-week', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id }),
+          }).then(async res => {
+            if (res.ok) {
+              // Refresh profile so the new multiplier is picked up immediately
+              const { data: updatedProf } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+              if (updatedProf) setProfile(updatedProf as UserProfile);
+            }
+          }).catch(() => { /* silent — review is non-blocking */ });
+        }
+      }
 
       // If no plan yet, trigger generation and wait for it to resolve
       if (!prof.custom_plan) {
