@@ -9,8 +9,13 @@ import {
   getRacePlanInfo,
   PHASE_NAMES,
   dateToString,
+  getDayOfWeek,
+  getPlanStart,
+  isInRunwayPeriod,
   COLOR_BG,
   PlanProfile,
+  WorkoutInfo,
+  WorkoutDetail,
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
@@ -109,10 +114,58 @@ export default function TodayPage() {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [planGenerating, setPlanGenerating] = useState(false);
+  const [showRunwayDetail, setShowRunwayDetail] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
   const racePlanInfo = getRacePlanInfo(today, planProfile);
+
+  // Runway period: between sign-up and planStart Monday
+  const inRunway = profile ? isInRunwayPeriod(today, planProfile) : false;
+  const runwayPlan = profile?.runway_plan ?? null;
+  const runwayDayIndex = getDayOfWeek(today); // 0=Mon … 6=Sun
+  const runwayDay = runwayPlan ? runwayPlan[runwayDayIndex] : null;
+
+  // Compute how many days until planStart
+  const planStartDate = planProfile ? getPlanStart(planProfile) : null;
+  const daysToStart = planStartDate
+    ? Math.ceil((planStartDate.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / (24 * 60 * 60 * 1000))
+    : null;
+
+  // Hardcoded mobility steps for gym-type runway sessions
+  const MOBILITY_STEPS: WorkoutDetail = {
+    duration: '25–30 min',
+    intensity: 'Easy — mobility focus',
+    steps: [
+      { icon: '🦵', title: 'Hip flexor stretch', detail: '60 sec each side. Kneel on one knee, push hips forward gently.' },
+      { icon: '🦵', title: 'Hamstring stretch', detail: '60 sec each side. Seated, reach toward toes, keep back straight.' },
+      { icon: '🦶', title: 'Calf raise + stretch', detail: '15 slow raises then 30 sec stretch each leg. Hands on wall.' },
+      { icon: '🍑', title: 'Glute bridge', detail: '3 × 15 reps. Feet flat, drive hips up, squeeze at the top.' },
+      { icon: '🔄', title: 'Thoracic rotation', detail: '10 reps each side. Seated cross-legged, rotate upper body slowly.' },
+      { icon: '🧘', title: "Child's pose", detail: '60 seconds. Arms extended, breathe deeply.' },
+    ],
+    keyPoints: ['Move gently — this is prep, not performance.', 'Stop if anything hurts.'],
+  };
+
+  function buildRunwayDetail(day: typeof runwayDay): WorkoutDetail | null {
+    if (!day || day.type === 'rest') return null;
+    if (day.type === 'gym') return MOBILITY_STEPS;
+    return {
+      duration: day.type === 'run' ? '20–25 min' : '25–30 min',
+      intensity: 'Easy — preparation week',
+      steps: [{ icon: day.type === 'run' ? '🏃' : '🚴', title: day.label, detail: day.description }],
+      keyPoints: ['Keep it easy — this is your warm-up week.', 'Enjoy the process!'],
+    };
+  }
+
+  const runwayDetail = buildRunwayDetail(runwayDay);
+  const runwayWorkoutInfo: WorkoutInfo | null = runwayDay && runwayDay.type !== 'rest' ? {
+    type: runwayDay.type as WorkoutInfo['type'],
+    label: runwayDay.label,
+    description: runwayDay.description,
+    color: (runwayDay.color ?? 'gray') as WorkoutInfo['color'],
+  } : null;
+
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   // Read Strava OAuth result from URL params
@@ -386,8 +439,71 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* ── Plan Generating State ── show whenever profile is loaded but plan isn't ready */}
-        {profile && !profile.custom_plan && (
+        {/* ── Runway Period ── shown between sign-up and planStart */}
+        {inRunway && (
+          <>
+            {/* Skeleton: runway_plan not yet generated */}
+            {!runwayDay && (
+              <div className="rounded-2xl p-6 bg-gray-900 border border-gray-700/40 flex flex-col items-center gap-4 text-center">
+                <svg className="animate-spin w-8 h-8 text-gray-500" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <div>
+                  <p className="text-white font-semibold text-base">Preparing your week…</p>
+                  <p className="text-gray-500 text-sm mt-1">Generating your personalised preparation sessions</p>
+                </div>
+              </div>
+            )}
+
+            {/* Runway card: rest day */}
+            {runwayDay && runwayDay.type === 'rest' && (
+              <div className="rounded-2xl p-5 bg-gray-900 border border-gray-700/40">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-xs font-semibold uppercase tracking-widest">Preparation Week</span>
+                  <span className="text-gray-500 text-xs font-medium bg-gray-800 px-2 py-0.5 rounded-full border border-gray-700">Optional</span>
+                </div>
+                <h2 className="text-white text-2xl font-bold leading-tight">{runwayDay.label}</h2>
+                <p className="text-gray-400 text-sm mt-2 leading-relaxed">{runwayDay.description}</p>
+                {planStartDate && daysToStart !== null && (
+                  <div className="mt-4 pt-4 border-t border-gray-800">
+                    <p className="text-gray-300 text-sm font-semibold">
+                      Your plan starts {planStartDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </p>
+                    <p className="text-gray-500 text-xs mt-0.5">{daysToStart} day{daysToStart !== 1 ? 's' : ''} to go</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Runway card: active session */}
+            {runwayDay && runwayDay.type !== 'rest' && (
+              <div
+                className="rounded-2xl p-5 bg-gray-900 border border-gray-700/40 cursor-pointer active:scale-[0.98] transition-transform"
+                onClick={() => setShowRunwayDetail(true)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-xs font-semibold uppercase tracking-widest">Preparation Week</span>
+                  <span className="text-gray-500 text-xs font-medium bg-gray-800 px-2 py-0.5 rounded-full border border-gray-700">Optional</span>
+                </div>
+                <h2 className="text-white text-2xl font-bold leading-tight">{runwayDay.label}</h2>
+                <p className="text-gray-400 text-sm mt-2 leading-relaxed">{runwayDay.description}</p>
+                <p className="text-gray-500 text-xs mt-3">Tap for full session details →</p>
+                {planStartDate && daysToStart !== null && (
+                  <div className="mt-4 pt-4 border-t border-gray-800">
+                    <p className="text-gray-300 text-sm font-semibold">
+                      Your plan starts {planStartDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </p>
+                    <p className="text-gray-500 text-xs mt-0.5">{daysToStart} day{daysToStart !== 1 ? 's' : ''} to go</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Plan Generating State ── shown when not in runway but no plan yet */}
+        {!inRunway && profile && !profile.custom_plan && (
           <div className="rounded-2xl p-6 bg-gray-900 border border-gray-800 flex flex-col items-center gap-4 text-center">
             <svg className="animate-spin w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
@@ -400,8 +516,8 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* ── Workout Card ── only show once plan is ready */}
-        {profile?.custom_plan && <div
+        {/* ── Workout Card ── only shown once plan is ready AND not in runway */}
+        {!inRunway && profile?.custom_plan && <div
           className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
           onClick={() => setShowDetail(true)}
         >
@@ -598,6 +714,15 @@ export default function TodayPage() {
           detail={getWorkoutDetail(today, planProfile)}
           dateLabel={dateLabel}
           onClose={() => setShowDetail(false)}
+        />
+      )}
+
+      {showRunwayDetail && runwayWorkoutInfo && runwayDetail && (
+        <WorkoutDetailSheet
+          workout={runwayWorkoutInfo}
+          detail={runwayDetail}
+          dateLabel={`Preparation — ${today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`}
+          onClose={() => setShowRunwayDetail(false)}
         />
       )}
 
