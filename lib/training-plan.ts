@@ -56,6 +56,7 @@ export interface PlanProfile {
   raceDate?: string | null;       // YYYY-MM-DD
   createdAt?: string | null;      // profile created_at for default anchor
   injuryNotes?: string | null;
+  planAdjustment?: number | null;
 }
 
 // ─── Race schedule (from user's profile races, used for display only) ────────

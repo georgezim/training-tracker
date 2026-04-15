@@ -46,6 +46,13 @@ export interface UserProfile {
   custom_plan: CustomPlanDay[] | null;
   preferred_activities: string[] | null;
   avatar_url: string | null;
+  plan_adjustment: {
+    action: string;
+    reason: string;
+    long_run_km_adjustment: number;
+    multiplier: number;
+    applied_at: string;
+  } | null;
   created_at?: string;
 }
 
