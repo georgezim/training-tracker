@@ -152,10 +152,9 @@ export default function SettingsPage() {
     }
 
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
     // Update originalProfile for future change detection
     if (originalProfile) setOriginalProfile({ ...originalProfile, ...profileData });
+    router.push('/');
   }
 
   if (loading) {
@@ -170,7 +169,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-gray-950" style={{ paddingBottom: '5.5rem' }}>
       <header className="bg-[#1B2A4A] px-4 pb-4" style={{ paddingTop: 'max(env(safe-area-inset-top), 2.5rem)' }}>
         <div className="max-w-md mx-auto flex items-center gap-3">
-          <button onClick={() => router.back()} className="text-gray-400 hover:text-white p-1">
+          <button onClick={() => router.push('/')} className="text-gray-400 hover:text-white p-1">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
