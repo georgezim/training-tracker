@@ -9,6 +9,7 @@ import {
   getDaysInCurrentWeek,
   getWeekStart,
   getRacePlanInfo,
+  getPlanStart,
   dateToString,
   COLOR_BG,
   COLOR_TEXT,
@@ -65,6 +66,15 @@ export default function WeekPage() {
     injuryNotes: profile.injury_notes ?? null,
     planAdjustment: profile.plan_adjustment?.multiplier ?? 1.0,
   } : null;
+
+  // Detect if the displayed week is the runway/preparation week (before planStart)
+  const planStartDate = planProfile ? getPlanStart(planProfile) : null;
+  const anchorWeekStart = getWeekStart(anchorDate);
+  const isRunwayWeek = planStartDate !== null &&
+    anchorWeekStart.getTime() < planStartDate.getTime();
+
+  // runway_plan indexed Mon–Sun (0–6)
+  const runwayPlan = profile?.runway_plan ?? null;
 
   useEffect(() => {
     async function init() {
@@ -186,7 +196,13 @@ export default function WeekPage() {
                   <>
                     <div className="flex items-center justify-center gap-2">
                       <h1 className="text-white text-xl font-bold">
-                        {isCurrentWeek ? 'This Week' : rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks ? `Week ${rpi.currentWeek}` : 'This Week'}
+                        {isRunwayWeek
+                          ? 'Preparation'
+                          : isCurrentWeek
+                            ? 'This Week'
+                            : rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks
+                              ? `Week ${rpi.currentWeek}`
+                              : 'This Week'}
                       </h1>
                       {rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks && (
                         <span className="text-blue-300 text-xs font-medium bg-blue-900/40 px-2 py-1 rounded-full">
@@ -194,8 +210,11 @@ export default function WeekPage() {
                         </span>
                       )}
                     </div>
-                    {rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks && (
+                    {!isRunwayWeek && rpi && rpi.currentWeek > 0 && rpi.currentWeek <= rpi.totalWeeks && (
                       <p className="text-blue-300/80 text-sm mt-0.5">{rpi.phaseName}</p>
+                    )}
+                    {isRunwayWeek && (
+                      <p className="text-gray-500 text-sm mt-0.5">Get ready — plan starts next Monday</p>
                     )}
                   </>
                 );
@@ -236,8 +255,105 @@ export default function WeekPage() {
           ))}
         </div>
 
-        {/* Plan not ready yet */}
-        {profile && !profile.custom_plan && (
+        {/* ── Runway week: show runway_plan days ── */}
+        {isRunwayWeek && days.map((day, i) => {
+          const dayStr = dateToString(day);
+          const isToday = dayStr === todayStr;
+          const rwDay = runwayPlan ? runwayPlan[i] : null;
+          const isActive = rwDay && rwDay.type !== 'rest';
+
+          const mutableColorBg: Record<string, string> = {
+            blue: 'bg-blue-900/50', purple: 'bg-purple-900/50',
+            orange: 'bg-orange-900/50', gray: 'bg-gray-700/30',
+          };
+          const mutableColorText: Record<string, string> = {
+            blue: 'text-blue-500', purple: 'text-purple-500',
+            orange: 'text-orange-500', gray: 'text-gray-600',
+          };
+          const colorKey = rwDay?.color ?? 'gray';
+          const colorStrip = mutableColorBg[colorKey] ?? 'bg-gray-700/30';
+          const colorText = mutableColorText[colorKey] ?? 'text-gray-600';
+
+          const runwayWorkoutInfo: WorkoutInfo | null = isActive ? {
+            type: rwDay!.type as WorkoutInfo['type'],
+            label: rwDay!.label,
+            description: rwDay!.description,
+            color: (rwDay!.color ?? 'gray') as WorkoutInfo['color'],
+          } : null;
+
+          const MOBILITY_STEPS: WorkoutDetail = {
+            duration: '25–30 min',
+            intensity: 'Easy — mobility focus',
+            steps: [
+              { icon: '🦵', title: 'Hip flexor stretch', detail: '60 sec each side. Kneel on one knee, push hips forward gently.' },
+              { icon: '🦵', title: 'Hamstring stretch', detail: '60 sec each side. Seated, reach toward toes, keep back straight.' },
+              { icon: '🦶', title: 'Calf raise + stretch', detail: '15 slow raises then 30 sec stretch each leg. Hands on wall.' },
+              { icon: '🍑', title: 'Glute bridge', detail: '3 × 15 reps. Feet flat, drive hips up, squeeze at the top.' },
+              { icon: '🔄', title: 'Thoracic rotation', detail: '10 reps each side. Seated cross-legged, rotate upper body slowly.' },
+              { icon: '🧘', title: "Child's pose", detail: '60 seconds. Arms extended, breathe deeply.' },
+            ],
+            keyPoints: ['Move gently — this is prep, not performance.', 'Stop if anything hurts.'],
+          };
+
+          function buildRunwayDetailWeek(rd: typeof rwDay): WorkoutDetail | null {
+            if (!rd || rd.type === 'rest') return null;
+            if (rd.type === 'gym') return MOBILITY_STEPS;
+            return {
+              duration: rd.type === 'run' ? '20–25 min' : '25–30 min',
+              intensity: 'Easy — preparation week',
+              steps: [{ icon: rd.type === 'run' ? '🏃' : '🚴', title: rd.label, detail: rd.description }],
+              keyPoints: ['Keep it easy — this is your warm-up week.'],
+            };
+          }
+
+          const rwDetail = buildRunwayDetailWeek(rwDay);
+          const rwDateLabel = `${DAY_NAMES[i]} ${day.getDate()} ${day.toLocaleString('default', { month: 'short' })}`;
+
+          return (
+            <div
+              key={dayStr}
+              onClick={() => {
+                if (!isActive || !runwayWorkoutInfo || !rwDetail) return;
+                setSelectedDay({ workout: runwayWorkoutInfo, detail: rwDetail, label: rwDateLabel });
+              }}
+              className={`rounded-xl p-4 flex items-center gap-3 transition-all ${
+                isActive ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'
+              } ${isToday ? 'bg-gray-800 ring-1 ring-white/20' : 'bg-gray-900/80'}`}
+            >
+              {/* Day label */}
+              <div className="w-10 flex-shrink-0 text-center">
+                <p className={`text-xs font-semibold ${isToday ? 'text-white' : 'text-gray-500'}`}>{DAY_NAMES[i]}</p>
+                <p className={`text-base font-bold leading-tight ${isToday ? 'text-white' : 'text-gray-400'}`}>{day.getDate()}</p>
+              </div>
+
+              {/* Color strip */}
+              <div className={`w-1 self-stretch rounded-full flex-shrink-0 ${colorStrip}`} />
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className={`text-xs font-semibold ${colorText} uppercase tracking-wide`}>
+                    {rwDay?.type === 'rest' ? 'Rest' : rwDay?.type ?? 'Rest'}
+                  </p>
+                  <span className="text-gray-600 text-xs font-medium bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">Optional</span>
+                </div>
+                <p className="text-white text-sm font-semibold leading-tight mt-0.5 truncate">
+                  {rwDay?.label ?? 'Rest Day'}
+                </p>
+                {isActive && (
+                  <p className="text-gray-500 text-xs mt-0.5 truncate">{rwDay?.description}</p>
+                )}
+              </div>
+
+              {isActive && (
+                <span className="text-gray-600 text-sm flex-shrink-0">›</span>
+              )}
+            </div>
+          );
+        })}
+
+        {/* ── Normal week: plan not ready yet ── */}
+        {!isRunwayWeek && profile && !profile.custom_plan && (
           <div className="rounded-2xl p-6 bg-gray-900 border border-gray-800 flex flex-col items-center gap-4 text-center mt-2">
             <svg className="animate-spin w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
@@ -250,7 +366,8 @@ export default function WeekPage() {
           </div>
         )}
 
-        {profile?.custom_plan && days.map((day, i) => {
+        {/* ── Normal week: plan ready ── */}
+        {!isRunwayWeek && profile?.custom_plan && days.map((day, i) => {
           const dayStr = dateToString(day);
           const workout = getWorkoutForDateWithProfile(day, planProfile);
           const isToday = dayStr === todayStr;
