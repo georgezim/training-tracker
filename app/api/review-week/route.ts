@@ -87,7 +87,14 @@ export async function POST() {
     const sessionsCompleted = sessions.filter(s => s.status === 'done').length;
     const customPlan: Array<{ type: string }> = Array.isArray(profile?.custom_plan) ? profile.custom_plan : [];
     const sessionsPlanned = customPlan.filter(d => d.type !== 'rest').length;
-    const completionRate = sessionsPlanned > 0 ? sessionsCompleted / sessionsPlanned : 0;
+
+    // No plan yet — skip Gemini and return a neutral maintain to avoid biasing week 1
+    if (sessionsPlanned === 0) {
+      console.log('[review-week] No custom plan yet — returning maintain');
+      return NextResponse.json({ action: 'maintain', reason: 'No plan data yet.', long_run_km_adjustment: 0, multiplier: 1.0, applied_at: new Date().toISOString() });
+    }
+
+    const completionRate = sessionsCompleted / sessionsPlanned;
 
     const recoveryValues = checkins
       .map(c => c.whoop_recovery)

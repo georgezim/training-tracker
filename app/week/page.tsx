@@ -74,11 +74,7 @@ export default function WeekPage() {
         const lastApplied = (prof as UserProfile).plan_adjustment?.applied_at ?? '';
         const alreadyRanToday = lastApplied.startsWith(todayIso);
         if (!alreadyRanToday) {
-          fetch('/api/review-week', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
-          }).then(async res => {
+          fetch('/api/review-week', { method: 'POST' }).then(async res => {
             if (res.ok) {
               // Refresh profile so the new multiplier is picked up immediately
               const { data: updatedProf } = await supabase
