@@ -20,7 +20,6 @@ import {
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import StravaActivityCard from '@/components/StravaActivityCard';
-import AiCoachCard from '@/components/AiCoachCard';
 import { useStravaActivity } from '@/lib/useStravaActivity';
 import AvatarCropModal from '@/components/AvatarCropModal';
 
@@ -73,6 +72,26 @@ function achillesTier(v: number | null): 'green' | 'yellow' | 'red' | 'gray' {
   if (v === 0) return 'green';
   if (v <= 3) return 'yellow';
   return 'red';
+}
+
+function checkinTier(ci: DailyCheckin | null): 'red' | 'yellow' | 'green' | 'none' {
+  if (!ci) return 'none';
+  // Red — meaningful intervention needed
+  if (
+    (ci.whoop_recovery != null && ci.whoop_recovery < 33) ||
+    (ci.sleep_score != null && ci.sleep_score < 33) ||
+    (ci.sleep_hours != null && ci.sleep_hours < 6) ||
+    (ci.achilles_pain != null && ci.achilles_pain >= 4) ||
+    ci.feeling === 'bad' || ci.feeling === 'injured'
+  ) return 'red';
+  // Yellow — slightly off, show tip only
+  if (
+    (ci.whoop_recovery != null && ci.whoop_recovery >= 33 && ci.whoop_recovery < 70) ||
+    (ci.sleep_score != null && ci.sleep_score >= 33 && ci.sleep_score < 70) ||
+    (ci.sleep_hours != null && ci.sleep_hours >= 6 && ci.sleep_hours < 7.5) ||
+    ci.feeling === 'tired'
+  ) return 'yellow';
+  return 'green';
 }
 
 interface UserRace { id: string; name: string; date: string; distance: string; emoji: string; }
@@ -166,6 +185,8 @@ export default function TodayPage() {
     color: (runwayDay.color ?? 'gray') as WorkoutInfo['color'],
   } : null;
 
+  const currentTier = checkinTier(checkin);
+
   const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
 
   // Read Strava OAuth result from URL params
@@ -183,9 +204,6 @@ export default function TodayPage() {
     }
     if (status) window.history.replaceState({}, '', '/');
   }, []);
-
-  // AI Coach — from Supabase checkin record
-  const [aiCoach, setAiCoach] = useState<{ title: string; description: string } | null>(null);
 
   // Races
   const [races, setRaces] = useState<UserRace[]>([]);
@@ -276,11 +294,6 @@ export default function TodayPage() {
             console.error('[plan] generate-plan fetch failed:', err);
           })
           .finally(() => setPlanGenerating(false));
-      }
-
-      // Load AI coach from checkin record
-      if (ci?.ai_coach_title) {
-        setAiCoach({ title: ci.ai_coach_title, description: ci.ai_coach_description ?? '' });
       }
 
       // Show checkin popup on every fresh load after 5am if not yet checked in today
@@ -523,10 +536,13 @@ export default function TodayPage() {
         >
           <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-white to-transparent" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">
                 {workout.type === 'rest' ? 'Rest Day' : workout.type}
               </span>
+              {checkin?.ai_coach_title && (
+                <span className="text-xs font-medium text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded-full">✦ Adapted by AI</span>
+              )}
               {session && (
                 <span className="flex items-center gap-1 text-xs text-green-300 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
@@ -534,8 +550,12 @@ export default function TodayPage() {
                 </span>
               )}
             </div>
-            <h2 className="text-white text-2xl font-bold leading-tight">{workout.label}</h2>
-            <p className="text-white/75 text-sm mt-2 leading-relaxed">{workout.description}</p>
+            <h2 className="text-white text-2xl font-bold leading-tight">
+              {checkin?.ai_coach_title ?? workout.label}
+            </h2>
+            <p className="text-white/75 text-sm mt-2 leading-relaxed">
+              {checkin?.ai_coach_description ?? workout.description}
+            </p>
             <p className="text-white/40 text-xs mt-2">Tap for full workout details →</p>
 
             {workout.type !== 'rest' && (
@@ -574,6 +594,11 @@ export default function TodayPage() {
           </div>
         </div>}
 
+        {/* ── Yellow tip — shown when metrics are slightly off but not red ── */}
+        {!inRunway && checkin && currentTier === 'yellow' && workout && workout.type !== 'rest' && (
+          <p className="text-gray-500 text-xs text-center px-2">Feeling a bit off today — ease into it if needed.</p>
+        )}
+
         {/* ── Goal-based plan notice for non-race users ── */}
         {profile && profile.goal && !['marathon', 'half_marathon', '10k'].includes(profile.goal) && (
           <div className="bg-blue-950/50 border border-blue-800/40 rounded-xl px-4 py-3">
@@ -606,14 +631,6 @@ export default function TodayPage() {
               Keep today easy. Focus on sleep and nutrition tonight.
             </p>
           </div>
-        )}
-
-        {/* ── AI Coach ── */}
-        {aiCoach && (
-          <AiCoachCard
-            coach={aiCoach}
-            onDismiss={() => setAiCoach(null)}
-          />
         )}
 
         {/* ── Strava status message ── */}
@@ -733,12 +750,12 @@ export default function TodayPage() {
           planProfile={planProfile}
           userId={userId}
           todayStr={todayStr}
+          inRunway={inRunway}
           onSave={(saved) => {
             setCheckin(saved);
-            if (saved.ai_coach_title) {
-              setAiCoach({ title: saved.ai_coach_title, description: saved.ai_coach_description ?? '' });
-            }
-            setShowCheckinModal(false);
+          }}
+          onAiResult={(title, desc) => {
+            setCheckin(prev => prev ? { ...prev, ai_coach_title: title, ai_coach_description: desc } : prev);
           }}
           onDismiss={() => setShowCheckinModal(false)}
         />
