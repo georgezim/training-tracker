@@ -183,8 +183,8 @@ export function getRacePlanInfo(date: Date, profile?: PlanProfile | null): RaceP
 
   // Clamp: plan must not start before the day after the user signed up
   if (profile.createdAt) {
-    const signupTomorrow = new Date(new Date(profile.createdAt).getTime() + 24 * 60 * 60 * 1000);
-    const st = new Date(signupTomorrow.getFullYear(), signupTomorrow.getMonth(), signupTomorrow.getDate());
+    const signup = new Date(profile.createdAt);
+    const st = new Date(signup.getFullYear(), signup.getMonth(), signup.getDate() + 1);
     if (planStart < st) planStart = st;
   }
 
