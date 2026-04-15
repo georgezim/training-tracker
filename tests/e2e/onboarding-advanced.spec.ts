@@ -8,14 +8,14 @@ test.describe('Scenario 4 — Advanced 10K with race date', () => {
 
   test.beforeEach(async ({ page }) => {
     ({ userId, email, password } = await createTestUser('advanced'));
-    await setupProfile(userId, {
+    await loginAs(page, email, password);
+    await setupProfile(page, userId, {
       goal: '10k',
       training_level: 'advanced',
       days_per_week: 5,
       preferred_activities: ['run', 'gym'],
       race_date: '2026-06-23',
     });
-    await loginAs(page, email, password);
   });
 
   test.afterEach(async () => { await deleteTestUser(userId); });

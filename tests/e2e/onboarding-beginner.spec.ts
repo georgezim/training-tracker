@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestUser, deleteTestUser, loginAs, setupProfile } from './helpers/auth';
+import { createTestUser, deleteTestUser, loginAs, setupProfile, backdateUser } from './helpers/auth';
 
 test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
   let userId: string;
@@ -9,7 +9,6 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
   test.beforeEach(async ({ page }) => {
     ({ userId, email, password } = await createTestUser('beginner'));
     // Simulate Wednesday signup by backdating created_at and setting profile
-    const supabase = (await import('./helpers/auth')).getSupabaseAdmin();
     // Set created_at to last Wednesday
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0=Sun
@@ -18,10 +17,9 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
     lastWed.setDate(today.getDate() - daysToLastWed);
     const wednesdayStr = lastWed.toISOString();
 
-    // @ts-ignore — admin API types don't expose created_at but it works at runtime
-    await supabase.auth.admin.updateUserById(userId, { created_at: wednesdayStr });
-
-    await setupProfile(userId, {
+    await backdateUser(userId, wednesdayStr);
+    await loginAs(page, email, password);
+    await setupProfile(page, userId, {
       goal: 'marathon',
       training_level: 'beginner',
       days_per_week: 3,
@@ -29,7 +27,6 @@ test.describe('Scenario 1 — Beginner marathon, Wednesday signup', () => {
       preferred_long_day: 'Sat',
       equipment: ['outdoor_running', 'gym'],
     });
-    await loginAs(page, email, password);
   });
 
   test.afterEach(async () => {

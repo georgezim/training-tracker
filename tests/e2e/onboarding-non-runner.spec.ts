@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestUser, deleteTestUser, loginAs, setupProfile, getSupabaseAdmin } from './helpers/auth';
+import { createTestUser, deleteTestUser, loginAs, setupProfile, backdateUser } from './helpers/auth';
 
 test.describe('Scenario 3 — Non-runner (bike + gym only)', () => {
   let userId: string;
@@ -8,20 +8,18 @@ test.describe('Scenario 3 — Non-runner (bike + gym only)', () => {
 
   test.beforeEach(async ({ page }) => {
     ({ userId, email, password } = await createTestUser('nonrunner'));
-    const supabase = getSupabaseAdmin();
     // Sign up yesterday so runway is active
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    // @ts-ignore — admin API types don't expose created_at but it works at runtime
-    await supabase.auth.admin.updateUserById(userId, { created_at: yesterday.toISOString() });
-    await setupProfile(userId, {
+    await backdateUser(userId, yesterday.toISOString());
+    await loginAs(page, email, password);
+    await setupProfile(page, userId, {
       goal: 'marathon',
       training_level: 'intermediate',
       days_per_week: 4,
       preferred_activities: ['gym', 'bike'],
       equipment: ['gym', 'bike'],
     });
-    await loginAs(page, email, password);
   });
 
   test.afterEach(async () => { await deleteTestUser(userId); });
