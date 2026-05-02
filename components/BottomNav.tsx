@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-type Tab = 'today' | 'week' | 'checkin' | 'history' | 'sessions';
+type Tab = 'today' | 'week' | 'checkin' | 'history' | 'sessions' | 'tests';
 
 interface NavItem {
   id: Tab;
@@ -43,6 +43,16 @@ const NAV_ITEMS: NavItem[] = [
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'tests',
+    href: '/tests',
+    label: 'Tests',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 20h.01M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/>
       </svg>
     ),
   },

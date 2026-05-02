@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import ZoneTestCard from '@/components/ZoneTestCard';
+import BottomNav from '@/components/BottomNav';
 
 interface ZoneTest {
   id: string;
@@ -145,6 +146,8 @@ export default function TestsPage() {
           <p className="text-gray-500 text-sm">No tests yet — run your first test to calibrate your zones.</p>
         </div>
       )}
+
+      <BottomNav active="tests" />
     </main>
   );
 }
