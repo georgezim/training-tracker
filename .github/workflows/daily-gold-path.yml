@@ -1,0 +1,116 @@
+name: Daily Gold Path — 2 AM Report
+
+on:
+  schedule:
+    - cron: '0 23 * * *'   # 23:00 UTC = 2:00 AM Athens (UTC+3)
+  workflow_dispatch:        # also allows manual trigger from GitHub UI
+
+jobs:
+  gold-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run gold path tests (JSON output)
+        id: run_tests
+        run: |
+          npx playwright test \
+            tests/e2e/auth.spec.ts \
+            tests/e2e/onboarding-beginner.spec.ts \
+            tests/e2e/week-navigation.spec.ts \
+            tests/e2e/weekly-review.spec.ts \
+            --reporter=json 2>/dev/null > test-results.json || true
+
+      - name: Build email report
+        id: report
+        run: |
+          node -e "
+          const fs = require('fs');
+          const raw = fs.readFileSync('test-results.json', 'utf8');
+          const results = JSON.parse(raw);
+
+          const passed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status === 'expected').length;
+          const failed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status !== 'expected').length;
+          const total = passed + failed;
+          const emoji = failed === 0 ? '✅' : '❌';
+          const status = failed === 0 ? 'ALL PASSING' : \`\${failed} FAILING\`;
+
+          const failedNames = results.suites
+            .flatMap(s => s.specs)
+            .flatMap(s => s.tests.map(t => ({ title: s.title, status: t.status })))
+            .filter(t => t.status !== 'expected')
+            .map(t => '  • ' + t.title)
+            .join('\n');
+
+          const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Athens' });
+
+          const body = [
+            \`\${emoji} Dromos — Daily Gold Path Report\`,
+            \`\${date}\`,
+            '',
+            \`Status: \${status}\`,
+            \`Passed: \${passed} / \${total}\`,
+            '',
+            failed > 0 ? 'Failed tests:\n' + failedNames : 'All critical flows are working perfectly.',
+            '',
+            'Run details: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}',
+          ].join('\n');
+
+          fs.writeFileSync('email-body.txt', body);
+          console.log(body);
+
+          // Set subject for next step
+          const subjectStatus = failed === 0 ? 'All good ✅' : \`\${failed} test(s) failing ❌\`;
+          fs.writeFileSync('email-subject.txt', \`Dromos daily report — \${subjectStatus}\`);
+          "
+
+      - name: Read email content
+        id: email_content
+        run: |
+          echo "subject=$(cat email-subject.txt)" >> $GITHUB_OUTPUT
+          {
+            echo 'body<<EOF'
+            cat email-body.txt
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
+      - name: Send email report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_SENDER_ADDRESS }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: ${{ steps.email_content.outputs.subject }}
+          to: george.zim83@gmail.com
+          from: Dromos Tests <${{ secrets.GMAIL_SENDER_ADDRESS }}>
+          body: ${{ steps.email_content.outputs.body }}
+
+      - name: Upload full report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-path-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 30
