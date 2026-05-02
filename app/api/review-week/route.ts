@@ -52,7 +52,7 @@ export async function POST() {
     console.log('[review-week] Reviewing week', fromDate, '→', toDate, 'for user:', userId);
 
     // Fetch all data in parallel
-    const [sessionsRes, activitiesRes, checkinsRes, profileRes] = await Promise.all([
+    const [sessionsRes, activitiesRes, checkinsRes, profileRes, overridesRes] = await Promise.all([
       supabase
         .from('completed_sessions')
         .select('date, session_type, status')
@@ -76,12 +76,19 @@ export async function POST() {
         .select('training_level, goal, custom_plan')
         .eq('id', userId)
         .single(),
+      supabase
+        .from('session_overrides')
+        .select('session_date, planned_type, actual_type, feedback_tags, feedback_notes')
+        .eq('user_id', userId)
+        .gte('session_date', fromDate)
+        .lte('session_date', toDate),
     ]);
 
     const sessions   = sessionsRes.data ?? [];
     const activities = activitiesRes.data ?? [];
     const checkins   = checkinsRes.data ?? [];
     const profile    = profileRes.data;
+    const overrides  = overridesRes.data ?? [];
 
     // Compute summary metrics
     const sessionsCompleted = sessions.filter(s => s.status === 'done').length;
@@ -126,6 +133,11 @@ LAST WEEK (${fromDate} to ${toDate}):
 - Avg recovery score: ${avgRecovery ?? 'N/A'} / 100
 - Avg Achilles pain: ${avgAchilles ?? 'N/A'} / 10
 - Total run km logged via Strava: ${totalRunKm}km
+${overrides.length > 0 ? `
+DEVIATIONS FROM PLAN this week:
+${overrides.map(o => `- ${o.session_date}: planned ${o.planned_type ?? 'rest'} → actual ${o.actual_type}. Tags: ${(o.feedback_tags ?? []).join(', ') || 'none'}${o.feedback_notes ? `. Notes: "${o.feedback_notes}"` : ''}`).join('\n')}
+
+Factor these deviations into your assessment. If "achilles_pain" appears in tags on 2+ sessions, recommend reducing running volume.` : ''}
 
 Based on this data, choose ONE action:
 - maintain: athlete is on track, no change
