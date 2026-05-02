@@ -10,6 +10,7 @@ import {
   PHASE_NAMES,
   dateToString,
   getDayOfWeek,
+  getDaysInCurrentWeek,
   getPlanStart,
   isInRunwayPeriod,
   COLOR_BG,
@@ -146,6 +147,7 @@ export default function TodayPage() {
     achilles_flag: boolean;
     tip: string;
   } | null>(null);
+  const [weekSessions, setWeekSessions] = useState<CompletedSession[]>([]);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -206,20 +208,23 @@ export default function TodayPage() {
 
   const { activity: stravaActivity, connected: stravaConnected, reconcileResult } = useStravaActivity(todayStr, plannedSession);
 
-  // Read Strava OAuth result from URL params
-  const [stravaMsg, setStravaMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Strava OAuth result — show a temporary toast for ?strava=connected, error banner for failures
+  const [stravaToast, setStravaToast] = useState(false);
+  const [stravaMsg, setStravaMsg] = useState<{ type: 'error'; text: string } | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const status = params.get('strava');
     const detail = params.get('detail');
     if (status === 'connected') {
-      setStravaMsg({ type: 'success', text: 'Strava connected! Go to Sessions tab and tap Sync to import your history.' });
+      setStravaToast(true);
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => setStravaToast(false), 5000);
     } else if (status === 'error' || status === 'dberror') {
       setStravaMsg({ type: 'error', text: `Connection failed: ${detail ? decodeURIComponent(detail) : status}` });
     } else if (status === 'denied') {
       setStravaMsg({ type: 'error', text: 'Strava authorization was denied.' });
     }
-    if (status) window.history.replaceState({}, '', '/');
+    if (status && status !== 'connected') window.history.replaceState({}, '', '/');
   }, []);
 
   // Races
@@ -282,6 +287,20 @@ export default function TodayPage() {
       setSession(se ?? null);
       if (prof) setProfile(prof as UserProfile);
       setRaces((prof as UserProfile | null)?.races ?? []);
+
+      // Fetch completed sessions for the current week (Mon-Sun) for progress dots
+      const weekDays = getDaysInCurrentWeek(today);
+      const weekStartStr = dateToString(weekDays[0]);
+      const weekEndStr = dateToString(weekDays[6]);
+      supabase
+        .from('completed_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', weekStartStr)
+        .lte('date', weekEndStr)
+        .then(({ data: weekData }) => {
+          if (weekData) setWeekSessions(weekData as CompletedSession[]);
+        });
 
       // Auto-generate personalised plan for users who don't have one yet
       // (existing users pre-dating onboarding, or signup where Gemini timed out)
@@ -520,6 +539,18 @@ export default function TodayPage() {
       </header>
 
       <main className="max-w-md mx-auto px-4 pt-5 space-y-4">
+        {stravaToast && (
+          <div className="mx-4 mb-4 bg-[#FC4C021A] border border-[#FC4C02]/40 rounded-2xl px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#FC4C02">
+                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+              </svg>
+              <span className="text-[#FC4C02] text-sm font-medium">Strava connected!</span>
+            </div>
+            <button onClick={() => setStravaToast(false)} className="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <p className="text-gray-500 text-sm">{dateLabel}</p>
           {checkin ? (
@@ -535,6 +566,52 @@ export default function TodayPage() {
             </button>
           )}
         </div>
+
+        {/* ── Week Progress ── */}
+        {planProfile && !inRunway && (() => {
+          const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+          const weekDays = getDaysInCurrentWeek(today);
+          const doneDates = new Set(weekSessions.filter(s => s.status === 'done').map(s => s.date));
+          const missedDates = new Set(weekSessions.filter(s => s.status === 'missed').map(s => s.date));
+          const doneCount = weekSessions.filter(s => s.status === 'done').length;
+          const plannedCount = weekDays.filter(d => getWorkoutForDateWithProfile(d, planProfile).type !== 'rest').length;
+
+          return (
+            <div className="bg-gray-900 rounded-2xl px-4 py-3 border border-gray-800/60">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-400 text-xs font-semibold uppercase tracking-widest">This Week</span>
+                <span className="text-gray-500 text-xs">{doneCount}/{plannedCount} sessions</span>
+              </div>
+              <div className="flex justify-between">
+                {weekDays.map((day, i) => {
+                  const dayStr = dateToString(day);
+                  const isToday = dayStr === todayStr;
+                  const planned = getWorkoutForDateWithProfile(day, planProfile);
+                  const isRest = planned.type === 'rest';
+                  const isDone = doneDates.has(dayStr);
+                  const isMissed = missedDates.has(dayStr);
+                  const isPast = day < today && !isToday;
+
+                  let dotClass = 'bg-gray-800 border-gray-700';
+                  if (isDone) dotClass = 'bg-green-600 border-green-500';
+                  else if (isMissed) dotClass = 'bg-red-900 border-red-700';
+                  else if (isRest) dotClass = 'bg-gray-800/50 border-gray-700/50';
+                  else if (isPast) dotClass = 'bg-gray-700 border-gray-600';
+
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-1">
+                      <span className={`text-[10px] ${isToday ? 'text-blue-400 font-bold' : 'text-gray-600'}`}>{DAY_LABELS[i]}</span>
+                      <div className={`w-5 h-5 rounded-full border ${dotClass} flex items-center justify-center ${isToday ? 'ring-1 ring-blue-500/50' : ''}`}>
+                        {isDone && <span className="text-white text-[9px]">✓</span>}
+                        {isMissed && <span className="text-red-300 text-[9px]">✕</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Race date nudge ── */}
         {needsRaceDateNudge && (
@@ -730,13 +807,9 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* ── Strava status message ── */}
+        {/* ── Strava error message ── */}
         {stravaMsg && (
-          <div className={`rounded-xl px-4 py-3 text-sm font-medium ${
-            stravaMsg.type === 'success'
-              ? 'bg-green-950 border border-green-700/60 text-green-300'
-              : 'bg-red-950 border border-red-700/60 text-red-300'
-          }`}>
+          <div className="rounded-xl px-4 py-3 text-sm font-medium bg-red-950 border border-red-700/60 text-red-300">
             {stravaMsg.text}
           </div>
         )}
@@ -756,19 +829,6 @@ export default function TodayPage() {
             </div>
             <span className="ml-auto text-gray-600 text-sm">→</span>
           </a>
-        )}
-
-        {stravaConnected === true && !stravaActivity && (
-          <div className="flex items-center gap-3 bg-green-950/50 border border-green-800/40 rounded-2xl px-4 py-3">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FC4C02">
-              <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
-            </svg>
-            <div>
-              <p className="text-green-300 text-sm font-semibold">Strava connected</p>
-              <p className="text-green-400/60 text-xs">No activity logged for today yet</p>
-            </div>
-            <span className="ml-auto text-green-500 text-base">✓</span>
-          </div>
         )}
 
         {stravaActivity && reconcileResult?.status === 'mismatch' && (
@@ -848,9 +908,9 @@ export default function TodayPage() {
           detail={getWorkoutDetail(today, planProfile)}
           dateLabel={dateLabel}
           onClose={() => setShowDetail(false)}
-          onMarkDone={stravaConnected === false ? () => setShowManualSheet('mark_done') : undefined}
-          onEditWorkout={stravaConnected === false ? () => setShowManualSheet('edit') : undefined}
-          onLogRestDay={stravaConnected === false ? () => setShowManualSheet('rest_day_log') : undefined}
+          onMarkDone={!stravaActivity ? () => setShowManualSheet('mark_done') : undefined}
+          onEditWorkout={!stravaActivity ? () => setShowManualSheet('edit') : undefined}
+          onLogRestDay={() => setShowManualSheet('rest_day_log')}
         />
       )}
 
