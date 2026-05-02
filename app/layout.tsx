@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: 'Dromos',
   description: 'Personal training tracker — AI-powered coaching for your goals',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon-maskable.svg',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -27,9 +31,6 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="bg-gray-950">
-      <head>
-        <link rel="apple-touch-icon" href="/logo.png" />
-      </head>
       <body className="bg-gray-950 text-white">
         {children}
         <Analytics />

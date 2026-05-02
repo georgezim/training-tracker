@@ -11,6 +11,17 @@
   "categories": ["health", "fitness", "sports"],
   "icons": [
     {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
       "src": "/logo.png",
       "sizes": "1024x1024",
       "type": "image/png",
