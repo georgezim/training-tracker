@@ -27,6 +27,7 @@ import MismatchFeedbackSheet from '@/components/MismatchFeedbackSheet';
 import ActivityFeedbackCard from '@/components/ActivityFeedbackCard';
 import ManualActivitySheet, { ManualActivityData } from '@/components/ManualActivitySheet';
 import { PlannedSession, StravaMatch } from '@/lib/reconcile';
+import WeeklyReportCard from '@/components/WeeklyReportCard';
 
 const FEELING_EMOJI: Record<string, string> = {
   great: '🟢',
@@ -100,6 +101,20 @@ function checkinTier(ci: DailyCheckin | null): 'red' | 'yellow' | 'green' | 'non
 }
 
 interface UserRace { id: string; name: string; date: string; distance: string; emoji: string; }
+
+interface WeeklyReport {
+  headline: string;
+  summary: string;
+  sessions_completed: number;
+  sessions_planned: number;
+  total_distance_km: number;
+  effort_rating: 'excellent' | 'good' | 'fair' | 'poor';
+  highlights: string[];
+  concerns: string[];
+  recovery_summary: string;
+  goal_progress: string;
+  next_week_suggestion: string;
+}
 function daysUntil(dateStr: string, today: Date): number {
   const d = new Date(dateStr + 'T00:00:00');
   const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -148,6 +163,8 @@ export default function TodayPage() {
     tip: string;
   } | null>(null);
   const [weekSessions, setWeekSessions] = useState<CompletedSession[]>([]);
+  const [weeklyReport, setWeeklyReport] = useState<{ report: WeeklyReport; weekStart: string; weekEnd: string } | null>(null);
+  const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -366,6 +383,31 @@ export default function TodayPage() {
         }
       }
 
+      // Show weekly report card on Sunday evening or Monday morning
+      const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon
+      const hourOfDay = today.getHours();
+      const isReportTime = (dayOfWeek === 0 && hourOfDay >= 18) || (dayOfWeek === 1 && hourOfDay < 12);
+      if (isReportTime && user) {
+        // Get Monday of last week (or this week's Monday if it's Sunday)
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : 0));
+        monday.setHours(0, 0, 0, 0);
+        const weekStart = monday.toISOString().split('T')[0];
+
+        fetch('/api/weekly-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, weekStart }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.report && !data.error) {
+              setWeeklyReport(data);
+            }
+          })
+          .catch(err => console.error('[weekly-report] fetch failed:', err));
+      }
+
       // Show checkin popup on every fresh load after 5am if not yet checked in today
       if (!ci && !checkinPrompted.current) {
         const hour = new Date().getHours();
@@ -549,6 +591,14 @@ export default function TodayPage() {
             </div>
             <button onClick={() => setStravaToast(false)} className="text-gray-500 hover:text-gray-300 text-lg leading-none">×</button>
           </div>
+        )}
+
+        {weeklyReport && !weeklyReportDismissed && (
+          <WeeklyReportCard
+            report={weeklyReport.report}
+            weekStart={weeklyReport.weekStart}
+            onDismiss={() => setWeeklyReportDismissed(true)}
+          />
         )}
 
         <div className="flex items-center justify-between">
