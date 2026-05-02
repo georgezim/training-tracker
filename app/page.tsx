@@ -22,6 +22,10 @@ import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import StravaActivityCard from '@/components/StravaActivityCard';
 import { useStravaActivity } from '@/lib/useStravaActivity';
 import AvatarCropModal from '@/components/AvatarCropModal';
+import MismatchFeedbackSheet from '@/components/MismatchFeedbackSheet';
+import ActivityFeedbackCard from '@/components/ActivityFeedbackCard';
+import ManualActivitySheet, { ManualActivityData } from '@/components/ManualActivitySheet';
+import { PlannedSession, StravaMatch } from '@/lib/reconcile';
 
 const FEELING_EMOJI: Record<string, string> = {
   great: '🟢',
@@ -134,6 +138,14 @@ export default function TodayPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [planGenerating, setPlanGenerating] = useState(false);
   const [showRunwayDetail, setShowRunwayDetail] = useState(false);
+  const [showMismatchSheet, setShowMismatchSheet] = useState(false);
+  const [showManualSheet, setShowManualSheet] = useState<false | 'mark_done' | 'edit' | 'rest_day_log'>(false);
+  const [activityFeedback, setActivityFeedback] = useState<{
+    summary: string;
+    effort_rating: 'too_easy' | 'right' | 'too_hard';
+    achilles_flag: boolean;
+    tip: string;
+  } | null>(null);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -187,7 +199,12 @@ export default function TodayPage() {
 
   const currentTier = checkinTier(checkin);
 
-  const { activity: stravaActivity, connected: stravaConnected } = useStravaActivity(todayStr);
+  const plannedSession: PlannedSession | null = workout.type !== 'rest' ? {
+    type: workout.type as PlannedSession['type'],
+    description: workout.description,
+  } : null;
+
+  const { activity: stravaActivity, connected: stravaConnected, reconcileResult } = useStravaActivity(todayStr, plannedSession);
 
   // Read Strava OAuth result from URL params
   const [stravaMsg, setStravaMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -398,6 +415,52 @@ export default function TodayPage() {
       setAvatarUploading(false);
     }
   }
+
+  async function requestActivityFeedback(actual: {
+    type: string;
+    distance_km: number;
+    duration_min: number;
+    avg_heartrate?: number;
+    avg_pace?: string;
+    elevation_m?: number;
+    source: 'strava' | 'manual';
+  }, mismatchFeedback?: { tags: string[]; notes?: string }) {
+    const weekDay = today.getDay() === 0 ? 7 : today.getDay(); // 1=Mon...7=Sun
+    const res = await fetch('/api/activity-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionDate: todayStr,
+        planned: plannedSession,
+        actual,
+        context: {
+          weekDay,
+          weeklyLoadKm: 0, // simplified for now
+          upcomingSessions: [],
+          isRestDay: workout.type === 'rest',
+        },
+        mismatchFeedback,
+      }),
+    });
+    if (res.ok) {
+      const fb = await res.json();
+      setActivityFeedback(fb);
+    }
+  }
+
+  useEffect(() => {
+    if (reconcileResult?.status === 'match' && stravaActivity) {
+      requestActivityFeedback({
+        type: stravaActivity.sport_type,
+        distance_km: stravaActivity.distance_m / 1000,
+        duration_min: stravaActivity.moving_time_s / 60,
+        avg_heartrate: stravaActivity.avg_heartrate,
+        elevation_m: stravaActivity.elevation_m,
+        source: 'strava',
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconcileResult?.status]);
 
   const bgClass = COLOR_BG[workout.color] ?? 'bg-gray-700';
   const dateLabel = today.toLocaleDateString('en-US', {
@@ -708,12 +771,32 @@ export default function TodayPage() {
           </div>
         )}
 
-        {stravaActivity && (
+        {stravaActivity && reconcileResult?.status === 'mismatch' && (
+          <div className="bg-yellow-950/40 border border-yellow-700/40 rounded-2xl p-4">
+            <p className="text-yellow-300 text-sm font-semibold mb-1">⚠️ Session mismatch</p>
+            <p className="text-yellow-200/70 text-xs mb-3">Your Strava activity doesn't match today's plan. Tell us what happened.</p>
+            <button
+              onClick={() => setShowMismatchSheet(true)}
+              className="text-yellow-300 text-sm font-medium underline"
+            >
+              Review →
+            </button>
+          </div>
+        )}
+
+        {stravaActivity && reconcileResult?.status !== 'mismatch' && (
           <StravaActivityCard
             activity={stravaActivity}
             plannedKm={
-              workout.label.match(/(\d+)km/) ? parseFloat(workout.label.match(/(\d+)km/)![1]) : undefined
+              workout.label.match(/(\d+\.?\d*)km/) ? parseFloat(workout.label.match(/(\d+\.?\d*)km/)![1]) : undefined
             }
+          />
+        )}
+
+        {activityFeedback && (
+          <ActivityFeedbackCard
+            feedback={activityFeedback}
+            onDismiss={() => setActivityFeedback(null)}
           />
         )}
 
@@ -765,6 +848,9 @@ export default function TodayPage() {
           detail={getWorkoutDetail(today, planProfile)}
           dateLabel={dateLabel}
           onClose={() => setShowDetail(false)}
+          onMarkDone={stravaConnected === false ? () => setShowManualSheet('mark_done') : undefined}
+          onEditWorkout={stravaConnected === false ? () => setShowManualSheet('edit') : undefined}
+          onLogRestDay={stravaConnected === false ? () => setShowManualSheet('rest_day_log') : undefined}
         />
       )}
 
@@ -774,6 +860,49 @@ export default function TodayPage() {
           detail={runwayDetail}
           dateLabel={`Preparation — ${today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`}
           onClose={() => setShowRunwayDetail(false)}
+        />
+      )}
+
+      {showMismatchSheet && stravaActivity && plannedSession && reconcileResult?.status === 'mismatch' && (
+        <MismatchFeedbackSheet
+          planned={plannedSession}
+          actual={{
+            strava_id: stravaActivity.strava_id,
+            sport_type: stravaActivity.sport_type,
+            distance_km: stravaActivity.distance_m / 1000,
+            moving_time_min: stravaActivity.moving_time_s / 60,
+            avg_heartrate: stravaActivity.avg_heartrate,
+            max_heartrate: stravaActivity.max_heartrate,
+          }}
+          onSubmit={async (tags, notes) => {
+            setShowMismatchSheet(false);
+            await requestActivityFeedback({
+              type: stravaActivity.sport_type,
+              distance_km: stravaActivity.distance_m / 1000,
+              duration_min: stravaActivity.moving_time_s / 60,
+              avg_heartrate: stravaActivity.avg_heartrate,
+              elevation_m: stravaActivity.elevation_m,
+              source: 'strava',
+            }, { tags, notes });
+          }}
+          onClose={() => setShowMismatchSheet(false)}
+        />
+      )}
+
+      {showManualSheet && (
+        <ManualActivitySheet
+          mode={showManualSheet}
+          planned={plannedSession ?? undefined}
+          onSubmit={async (data: ManualActivityData) => {
+            setShowManualSheet(false);
+            await requestActivityFeedback({
+              type: data.type,
+              distance_km: data.distance_km ?? 0,
+              duration_min: data.duration_min ?? 0,
+              source: 'manual',
+            }, showManualSheet === 'edit' ? { tags: [data.perceived_effort], notes: data.notes } : undefined);
+          }}
+          onClose={() => setShowManualSheet(false)}
         />
       )}
 
