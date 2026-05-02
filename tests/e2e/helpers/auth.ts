@@ -53,29 +53,31 @@ export async function deleteTestUser(userId: string) {
  * Returns the access token so it can be passed to setupProfile().
  */
 export async function loginAs(page: Page, email: string, password: string): Promise<string> {
-  let capturedToken = '';
-
-  // Intercept the Supabase /auth/v1/token response to capture the JWT
-  await page.route(`${SUPABASE_URL}/auth/v1/token*`, async (route) => {
-    const response = await route.fetch();
-    try {
-      const body = await response.json();
-      if (body.access_token) capturedToken = body.access_token;
-    } catch { /* ignore */ }
-    await route.fulfill({ response });
-  });
-
   await page.goto('/login');
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+
+  // waitForResponse + click in parallel so we don't miss the response
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (resp) => resp.url().includes('/auth/v1/token') && resp.status() === 200,
+      { timeout: 15000 }
+    ),
+    page.click('button[type="submit"]'),
+  ]);
+
+  let token = '';
+  try {
+    const body = await response.json();
+    token = body.access_token ?? '';
+  } catch { /* ignore */ }
+
   await page.waitForURL(
     (url) => !url.pathname.includes('/login') && !url.pathname.includes('/signup'),
     { timeout: 15000 }
   );
 
-  await page.unroute(`${SUPABASE_URL}/auth/v1/token*`);
-  return capturedToken;
+  return token;
 }
 
 /**
