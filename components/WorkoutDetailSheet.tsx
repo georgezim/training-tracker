@@ -8,9 +8,13 @@ interface Props {
   detail: WorkoutDetail;
   dateLabel: string;
   onClose: () => void;
+  // New optional callbacks for manual actions:
+  onMarkDone?: () => void;
+  onEditWorkout?: () => void;
+  onLogRestDay?: () => void;   // only shown when workout.type === 'rest'
 }
 
-export default function WorkoutDetailSheet({ workout, detail, dateLabel, onClose }: Props) {
+export default function WorkoutDetailSheet({ workout, detail, dateLabel, onClose, onMarkDone, onEditWorkout, onLogRestDay }: Props) {
   // Close on backdrop click or Escape key
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -93,6 +97,36 @@ export default function WorkoutDetailSheet({ workout, detail, dateLabel, onClose
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Actions */}
+          {(onMarkDone || onEditWorkout || onLogRestDay) && (
+            <div className="pt-2 pb-1 space-y-2">
+              {onMarkDone && workout.type !== 'rest' && (
+                <button
+                  onClick={() => { onMarkDone(); onClose(); }}
+                  className="w-full py-3.5 rounded-2xl font-semibold text-sm text-white bg-green-700 active:scale-95 transition-transform"
+                >
+                  ✓ Mark as done
+                </button>
+              )}
+              {onEditWorkout && workout.type !== 'rest' && (
+                <button
+                  onClick={() => { onEditWorkout(); onClose(); }}
+                  className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-300 bg-gray-800 border border-gray-700 active:scale-95 transition-transform"
+                >
+                  ✎ Edit what I did
+                </button>
+              )}
+              {onLogRestDay && workout.type === 'rest' && (
+                <button
+                  onClick={() => { onLogRestDay(); onClose(); }}
+                  className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-300 bg-gray-800 border border-gray-700 active:scale-95 transition-transform"
+                >
+                  + Log activity on rest day
+                </button>
+              )}
             </div>
           )}
         </div>
