@@ -62,8 +62,7 @@ export async function POST(req: NextRequest) {
           cached: true,
         });
       }
-      // Delete stale cache so Monday always gets fresh data
-      await supabase.from('weekly_reports').delete().eq('user_id', userId).eq('week_start', weekStart);
+      // force=true: fall through to regenerate — old report preserved until new one succeeds
     }
 
     // Fetch all week data in parallel
@@ -82,7 +81,7 @@ export async function POST(req: NextRequest) {
         .lte('session_date', weekEnd),
       supabase
         .from('strava_activities')
-        .select('activity_date, sport_type, distance_m, moving_time_s, avg_heartrate, avg_speed_ms')
+        .select('activity_date, sport_type, distance_m, moving_time_s, avg_heartrate')
         .eq('user_id', userId)
         .gte('activity_date', weekStart)
         .lte('activity_date', weekEnd),
@@ -164,7 +163,7 @@ ${checkins.length === 0 ? '- No check-ins recorded' : checkins.map(c =>
 KEY METRICS:
 - Sessions completed: ${sessionsCompleted} / ${sessionsPlanned} (Strava auto-detected + manual)
 - Total distance all sports (Strava): ${totalDistanceKm}km
-- Rest day training: ${strava.filter(a => !sessions.some(s => s.session_date === a.activity_date)).length} Strava activities on scheduled rest days
+- Unscheduled Strava activities: ${strava.filter(a => !sessions.some(s => s.session_date === a.activity_date)).length} (activities on days with no training plan session)
 - Avg recovery score: ${avgRecovery ?? 'N/A'}/100
 - Avg injury pain: ${avgInjuryPain ?? 'N/A'}/10
 
@@ -224,31 +223,19 @@ Write a thorough but concise weekly report. Be specific with numbers. Identify g
       return NextResponse.json({ error: 'Failed to parse Gemini response' }, { status: 500 });
     }
 
-    // Save to weekly_reports
-    const { error: insertError } = await supabase
+    // Save to weekly_reports via upsert
+    const { error: upsertError } = await supabase
       .from('weekly_reports')
-      .insert({
+      .upsert({
         user_id:     userId,
         week_start:  weekStart,
         week_end:    weekEnd,
         report_data: reportData,
-      });
+      }, { onConflict: 'user_id,week_start' });
 
-    if (insertError) {
-      // If uniqueness conflict (race condition), try to fetch the existing row
-      if (insertError.code === '23505') {
-        const { data: race } = await supabase
-          .from('weekly_reports')
-          .select('report_data, week_start, week_end')
-          .eq('user_id', userId)
-          .eq('week_start', weekStart)
-          .maybeSingle();
-        if (race) {
-          return NextResponse.json({ report: race.report_data, weekStart: race.week_start, weekEnd: race.week_end, cached: true });
-        }
-      }
-      console.error('[weekly-report] Insert error:', insertError);
-      return NextResponse.json({ error: 'Failed to save report', detail: insertError.message }, { status: 500 });
+    if (upsertError) {
+      console.error('[weekly-report] Upsert error:', upsertError);
+      return NextResponse.json({ error: 'Failed to save report', detail: upsertError.message }, { status: 500 });
     }
 
     console.log('[weekly-report] SUCCESS — effort_rating:', reportData.effort_rating, 'week:', weekStart);
