@@ -26,7 +26,10 @@ export default function ActivityFeedbackCard({ feedback, onDismiss }: Props) {
     },
   };
 
-  const effortData = effortConfig[feedback.effort_rating];
+  const effortData = effortConfig[feedback.effort_rating] ?? {
+    label: 'Effort recorded',
+    badgeClass: 'bg-gray-800 text-gray-400 border border-gray-700',
+  };
 
   return (
     <div className="bg-gray-900 border border-gray-700/60 rounded-2xl p-4">

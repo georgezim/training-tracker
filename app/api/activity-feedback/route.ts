@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   // Call Gemini
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${process.env.GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -74,10 +74,19 @@ export async function POST(req: NextRequest) {
     }
   );
 
+  if (!geminiRes.ok) {
+    const errText = await geminiRes.text();
+    console.error('[activity-feedback] Gemini API error:', geminiRes.status, errText);
+    return NextResponse.json({ error: 'AI unavailable' }, { status: 502 });
+  }
+
   const geminiData = await geminiRes.json();
-  const feedback = JSON.parse(
-    geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}'
-  );
+  const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!rawText) {
+    console.error('[activity-feedback] Gemini returned no content', JSON.stringify(geminiData));
+    return NextResponse.json({ error: 'AI returned no content' }, { status: 502 });
+  }
+  const feedback = JSON.parse(rawText);
 
   // Save to DB
   await supabase.from('activity_feedback').upsert({
