@@ -466,7 +466,7 @@ export default function SignupPage() {
               value={injuryNotes}
               onChange={e => setInjuryNotes(e.target.value.slice(0, 200))}
               rows={2}
-              placeholder="e.g. bad knee, achilles pain on left side…"
+              placeholder="e.g. bad knee, tendon pain on left side, shoulder injury…"
               className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
             />
           </div>
