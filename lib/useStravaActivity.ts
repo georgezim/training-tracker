@@ -18,7 +18,7 @@ export interface CachedActivity {
 }
 
 export function useStravaActivity(date: string, plannedSession?: PlannedSession | null) {
-  const [activity, setActivity] = useState<CachedActivity | null>(null);
+  const [activities, setActivities] = useState<CachedActivity[]>([]);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
@@ -34,9 +34,9 @@ export function useStravaActivity(date: string, plannedSession?: PlannedSession 
         if (isConnected) {
           const actRes = await fetch(`/api/strava/activities?date=${date}`);
           const data = await actRes.json();
+          setActivities(data.activities ?? []);
           if (data.activities?.length > 0) {
             const act: CachedActivity = data.activities[0];
-            setActivity(act);
             if (plannedSession !== undefined) {
               const stravaMatch: StravaMatch = {
                 strava_id: act.strava_id,
@@ -61,5 +61,5 @@ export function useStravaActivity(date: string, plannedSession?: PlannedSession 
     load();
   }, [date, plannedSession]);
 
-  return { activity, connected, loading, reconcileResult };
+  return { activities, activity: activities[0] ?? null, connected, loading, reconcileResult };
 }

@@ -73,7 +73,7 @@ function sleepTier(v: number | null): 'green' | 'yellow' | 'red' | 'gray' {
   if (v >= 50) return 'yellow';
   return 'red';
 }
-function achillesTier(v: number | null): 'green' | 'yellow' | 'red' | 'gray' {
+function injuryTier(v: number | null): 'green' | 'yellow' | 'red' | 'gray' {
   if (v === null) return 'gray';
   if (v === 0) return 'green';
   if (v <= 3) return 'yellow';
@@ -159,7 +159,7 @@ export default function TodayPage() {
   const [activityFeedback, setActivityFeedback] = useState<{
     summary: string;
     effort_rating: 'too_easy' | 'right' | 'too_hard';
-    achilles_flag: boolean;
+    injury_flag: boolean;
     tip: string;
   } | null>(null);
   const [weekSessions, setWeekSessions] = useState<CompletedSession[]>([]);
@@ -223,7 +223,7 @@ export default function TodayPage() {
     description: workout.description,
   } : null;
 
-  const { activity: stravaActivity, connected: stravaConnected, reconcileResult } = useStravaActivity(todayStr, plannedSession);
+  const { activities, activity: stravaActivity, connected: stravaConnected, loading: stravaLoading, reconcileResult } = useStravaActivity(todayStr, plannedSession);
 
   // Strava OAuth result — show a temporary toast for ?strava=connected, error banner for failures
   const [stravaToast, setStravaToast] = useState(false);
@@ -510,13 +510,19 @@ export default function TodayPage() {
   }
 
   useEffect(() => {
-    if (reconcileResult?.status === 'match' && stravaActivity) {
+    const primaryActivity = activities[0];
+    if (!primaryActivity) return;
+    if (
+      reconcileResult?.status === 'match' ||
+      reconcileResult?.status === 'rest_day_activity' ||
+      reconcileResult?.status === 'mismatch'
+    ) {
       requestActivityFeedback({
-        type: stravaActivity.sport_type,
-        distance_km: stravaActivity.distance_m / 1000,
-        duration_min: stravaActivity.moving_time_s / 60,
-        avg_heartrate: stravaActivity.avg_heartrate,
-        elevation_m: stravaActivity.elevation_m,
+        type: primaryActivity.sport_type,
+        distance_km: primaryActivity.distance_m / 1000,
+        duration_min: primaryActivity.moving_time_s / 60,
+        avg_heartrate: primaryActivity.avg_heartrate,
+        elevation_m: primaryActivity.elevation_m,
         source: 'strava',
       });
     }
@@ -753,6 +759,18 @@ export default function TodayPage() {
           </div>
         )}
 
+        {/* ── Rest day activity banner — shown when user trained on a rest day ── */}
+        {!inRunway && profile?.custom_plan && workout.type === 'rest' && reconcileResult?.status === 'rest_day_activity' && activities.length > 0 && (
+          <div className="bg-blue-950/40 border border-blue-700/40 rounded-2xl p-4 mb-3">
+            <p className="text-blue-300 text-sm font-semibold mb-2">💪 You trained on a rest day</p>
+            <div className="space-y-2">
+              {activities.map(act => (
+                <StravaActivityCard key={act.strava_id} activity={act} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Workout Card ── only shown once plan is ready AND not in runway */}
         {!inRunway && profile?.custom_plan && <div
           className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
@@ -781,6 +799,46 @@ export default function TodayPage() {
               {checkin?.ai_coach_description ?? workout.description}
             </p>
             <p className="text-white/40 text-xs mt-2">Tap for full workout details →</p>
+
+            {workout.type === 'rest' && (
+              <div className="mt-4" onClick={e => e.stopPropagation()}>
+                {/* State A — Strava not connected */}
+                {!stravaConnected && (
+                  <>
+                    <button
+                      onClick={() => setShowManualSheet('rest_day_log')}
+                      className="w-full py-2.5 bg-white text-black rounded-lg text-sm font-medium"
+                    >
+                      Log activity manually
+                    </button>
+                    <hr className="border-t border-white/10 my-3" />
+                    <button
+                      onClick={() => { window.location.href = '/api/strava/auth'; }}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-white/20 rounded-lg"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+                      <span className="text-xs text-white/50">Connect Strava to auto-sync</span>
+                    </button>
+                  </>
+                )}
+                {/* State B — Strava connected, no activity today */}
+                {stravaConnected && activities.length === 0 && reconcileResult?.status !== 'rest_day_activity' && (
+                  <>
+                    <button
+                      onClick={() => setShowManualSheet('rest_day_log')}
+                      className="w-full py-2.5 border border-white/20 text-white/60 rounded-lg text-sm"
+                    >
+                      Log manually instead
+                    </button>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg mt-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500/40 border border-green-500" />
+                      <span className="text-xs text-white/50 flex-1">Strava connected</span>
+                      <span className="text-xs text-white/30">No activity today</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {workout.type !== 'rest' && (
               <div className="mt-4" onClick={e => e.stopPropagation()}>
@@ -894,13 +952,19 @@ export default function TodayPage() {
           </div>
         )}
 
-        {stravaActivity && reconcileResult?.status !== 'mismatch' && (
-          <StravaActivityCard
-            activity={stravaActivity}
-            plannedKm={
-              workout.label.match(/(\d+\.?\d*)km/) ? parseFloat(workout.label.match(/(\d+\.?\d*)km/)![1]) : undefined
-            }
-          />
+        {activities.length > 0 && reconcileResult?.status !== 'mismatch' && reconcileResult?.status !== 'rest_day_activity' && (
+          <div className="space-y-3">
+            {activities.map((act, i) => (
+              <StravaActivityCard
+                key={act.strava_id}
+                activity={act}
+                plannedKm={i === 0 ? (() => {
+                  const m = workout.label.match(/(\d+\.?\d*)km/);
+                  return m ? parseFloat(m[1]) : undefined;
+                })() : undefined}
+              />
+            ))}
+          </div>
         )}
 
         {activityFeedback && (
@@ -930,7 +994,7 @@ export default function TodayPage() {
                     <MetricChip label="Sleep" value={`${checkin.sleep_score}%`} tier={sleepTier(checkin.sleep_score)} />
                   )}
                   {checkin.achilles_pain != null && profile?.injury_notes && (
-                    <MetricChip label="Achilles" value={`${checkin.achilles_pain}/10`} tier={achillesTier(checkin.achilles_pain)} />
+                    <MetricChip label="Injury" value={`${checkin.achilles_pain}/10`} tier={injuryTier(checkin.achilles_pain)} />
                   )}
                 </div>
                 {checkin.feeling && (
