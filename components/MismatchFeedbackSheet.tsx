@@ -12,7 +12,7 @@ interface Props {
 
 const TAG_OPTIONS: { id: string; label: string }[] = [
   { id: 'felt_tired', label: 'Felt tired' },
-  { id: 'achilles_pain', label: 'Achilles pain' },
+  { id: 'achilles_pain', label: 'Injury pain' },
   { id: 'weather', label: 'Weather' },
   { id: 'time_crunch', label: 'Time crunch' },
   { id: 'felt_good_went_longer', label: 'Felt good, went longer' },

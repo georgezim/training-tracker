@@ -119,11 +119,11 @@ export async function POST(req: NextRequest) {
       ? Math.round(recoveryValues.reduce((a, b) => a + b, 0) / recoveryValues.length)
       : null;
 
-    const achillesValues = checkins
+    const injuryPainValues = checkins
       .map(c => c.achilles_pain)
       .filter((v): v is number => v != null);
-    const avgAchilles = achillesValues.length > 0
-      ? Math.round(achillesValues.reduce((a, b) => a + b, 0) / achillesValues.length * 10) / 10
+    const avgInjuryPain = injuryPainValues.length > 0
+      ? Math.round(injuryPainValues.reduce((a, b) => a + b, 0) / injuryPainValues.length * 10) / 10
       : null;
 
     // Build prompt
@@ -155,14 +155,14 @@ ${overrides.map(o =>
 ` : ''}
 DAILY CHECK-INS:
 ${checkins.length === 0 ? '- No check-ins recorded' : checkins.map(c =>
-  `- ${c.checkin_date}: recovery=${c.whoop_recovery ?? 'N/A'}/100, achilles pain=${c.achilles_pain ?? 'N/A'}/10${c.sleep_hours ? `, sleep ${c.sleep_hours}h` : ''}${c.notes ? `, notes: "${c.notes}"` : ''}`
+  `- ${c.checkin_date}: recovery=${c.whoop_recovery ?? 'N/A'}/100, injury pain=${c.achilles_pain ?? 'N/A'}/10${c.sleep_hours ? `, sleep ${c.sleep_hours}h` : ''}${c.notes ? `, notes: "${c.notes}"` : ''}`
 ).join('\n')}
 
 KEY METRICS:
 - Sessions completed: ${sessionsCompleted} / ${sessionsPlanned}
 - Total run distance (Strava): ${totalDistanceKm}km
 - Avg recovery score: ${avgRecovery ?? 'N/A'}/100
-- Avg Achilles pain: ${avgAchilles ?? 'N/A'}/10
+- Avg injury pain: ${avgInjuryPain ?? 'N/A'}/10
 
 Write a thorough but concise weekly report. Be specific with numbers. Identify genuine highlights and concerns — don't manufacture either if data doesn't support them. Keep next_week_suggestion practical and actionable.`;
 

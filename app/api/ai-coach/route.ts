@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   // Low-recovery fallback must also respect preferred activities
   const lowRecoveryAlternative = canSwim ? 'easy swim' : canBike ? 'easy bike' : canGym ? 'light stretching/mobility' : 'complete rest';
-  const achillesAlternative = canBike ? 'bike' : canSwim ? 'swim' : 'upper body only';
+  const injuryAlternative = canBike ? 'bike' : canSwim ? 'swim' : 'upper body only';
 
   const prompt = `You are a personal fitness coach. Adapt today's planned workout based on this athlete's recovery data and preferences. Be concise and specific.
 
@@ -97,7 +97,7 @@ TODAY'S BODY DATA:
 ${checkin.whoop_recovery != null ? `- Recovery Score: ${checkin.whoop_recovery}%` : ''}
 ${checkin.sleep_score != null ? `- Sleep Score: ${checkin.sleep_score}%` : ''}
 ${checkin.sleep_hours != null ? `- Hours Slept: ${checkin.sleep_hours}h` : ''}
-${checkin.achilles_pain != null ? `- Achilles Pain: ${checkin.achilles_pain}/10` : ''}
+${checkin.achilles_pain != null && profile?.injury_notes ? `- Injury Pain (${profile.injury_notes}): ${checkin.achilles_pain}/10` : ''}
 - Feeling: ${checkin.feeling ?? 'not logged'}
 - Notes: ${checkin.notes || 'none'}
 
@@ -109,7 +109,7 @@ ${recentSummary}
 
 RULES (you are only called when the athlete's metrics are in the RED zone — this is a real intervention):
 - Low recovery (score <33%) or poor sleep (<6h): replace today's session with ${lowRecoveryAlternative} — make it a genuine recovery day, not a scaled-down workout
-- Achilles pain ≥4: no running at all — switch to ${achillesAlternative}
+- Injury pain ≥4: no running at all — switch to ${injuryAlternative}
 - Feeling "bad" or "injured": significantly reduce intensity or replace with recovery alternative
 - Only suggest activities from the athlete's preferred activities list — never suggest forbidden activities
 - Be specific: give exact duration, effort level, or exercises — vague advice is unhelpful

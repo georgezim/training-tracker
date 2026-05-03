@@ -110,11 +110,11 @@ export async function POST() {
       ? Math.round(recoveryValues.reduce((a, b) => a + b, 0) / recoveryValues.length)
       : null;
 
-    const achillesValues = checkins
+    const injuryPainValues = checkins
       .map(c => c.achilles_pain)
       .filter((v): v is number => v != null);
-    const avgAchilles = achillesValues.length > 0
-      ? Math.round(achillesValues.reduce((a, b) => a + b, 0) / achillesValues.length * 10) / 10
+    const avgInjuryPain = injuryPainValues.length > 0
+      ? Math.round(injuryPainValues.reduce((a, b) => a + b, 0) / injuryPainValues.length * 10) / 10
       : null;
 
     const runActivities = activities.filter(a =>
@@ -131,13 +131,13 @@ LAST WEEK (${fromDate} to ${toDate}):
 - Sessions completed: ${sessionsCompleted} / ${sessionsPlanned}
 - Completion rate: ${Math.round(completionRate * 100)}%
 - Avg recovery score: ${avgRecovery ?? 'N/A'} / 100
-- Avg Achilles pain: ${avgAchilles ?? 'N/A'} / 10
+- Avg injury pain: ${avgInjuryPain ?? 'N/A'} / 10
 - Total run km logged via Strava: ${totalRunKm}km
 ${overrides.length > 0 ? `
 DEVIATIONS FROM PLAN this week:
 ${overrides.map(o => `- ${o.session_date}: planned ${o.planned_type ?? 'rest'} → actual ${o.actual_type}. Tags: ${(o.feedback_tags ?? []).join(', ') || 'none'}${o.feedback_notes ? `. Notes: "${o.feedback_notes}"` : ''}`).join('\n')}
 
-Factor these deviations into your assessment. If "achilles_pain" appears in tags on 2+ sessions, recommend reducing running volume.` : ''}
+Factor these deviations into your assessment. If injury pain is flagged across 2+ sessions this week, recommend reducing running volume.` : ''}
 
 Based on this data, choose ONE action:
 - maintain: athlete is on track, no change

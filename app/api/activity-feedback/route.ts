@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
             properties: {
               summary: { type: 'string' },
               effort_rating: { type: 'string', enum: ['too_easy', 'right', 'too_hard'] },
-              achilles_flag: { type: 'boolean' },
+              injury_flag: { type: 'boolean' },
               tip: { type: 'string' },
             },
-            required: ['summary', 'effort_rating', 'achilles_flag', 'tip'],
+            required: ['summary', 'effort_rating', 'injury_flag', 'tip'],
           },
         },
       }),
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     activity_type: body.actual.type,
     feedback_text: feedback.summary,
     effort_rating: feedback.effort_rating,
-    achilles_flag: feedback.achilles_flag,
+    achilles_flag: feedback.injury_flag,   // DB column stays achilles_flag — field renamed in API
     tip: feedback.tip,
   }, { onConflict: 'user_id,session_date' });
 
@@ -124,7 +124,7 @@ function buildGeminiPrompt(body: FeedbackRequest, profile: any): string {
 ATHLETE:
 - Goal: ${profile?.goal ?? 'marathon'}
 - Level: ${profile?.training_level ?? 'intermediate'}
-- Known injury: recovering Achilles tendon
+- Known injury: ${profile?.injury_notes ?? 'none'}
 
 SESSION DATE CONTEXT:
 - Day ${context.weekDay} of 7
@@ -160,7 +160,7 @@ SESSION DATE CONTEXT:
   prompt += `\n\nRESPOND with:
 1. summary: 2 sentences max. What went well or what to watch. Be specific with numbers.
 2. effort_rating: was this session "too_easy", "right", or "too_hard" relative to the plan and their level?
-3. achilles_flag: true if this session's load/intensity could stress the Achilles. Consider total weekly load.
+3. injury_flag: true if this session's load/intensity could aggravate the athlete's known injury. Consider total weekly load.
 4. tip: One specific actionable tip for next time. Keep it to 1 sentence.
 
 Be direct. No fluff.`;
