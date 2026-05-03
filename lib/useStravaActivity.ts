@@ -6,6 +6,7 @@ import { reconcile, ReconcileResult, PlannedSession, StravaMatch } from './recon
 export interface CachedActivity {
   strava_id: number;
   activity_date: string;
+  start_time?: string | null;
   name: string;
   sport_type: string;
   distance_m: number;
@@ -34,20 +35,19 @@ export function useStravaActivity(date: string, plannedSession?: PlannedSession 
         if (isConnected) {
           const actRes = await fetch(`/api/strava/activities?date=${date}`);
           const data = await actRes.json();
-          setActivities(data.activities ?? []);
           if (data.activities?.length > 0) {
-            const act: CachedActivity = data.activities[0];
-            if (plannedSession !== undefined) {
-              const stravaMatch: StravaMatch = {
-                strava_id: act.strava_id,
-                sport_type: act.sport_type,
-                distance_km: act.distance_m / 1000,
-                moving_time_min: act.moving_time_s / 60,
-                avg_heartrate: act.avg_heartrate,
-                max_heartrate: act.max_heartrate,
-              };
-              setReconcileResult(reconcile(plannedSession ?? null, stravaMatch));
-            }
+            const sorted = [...data.activities].sort((a, b) => b.distance_m - a.distance_m);
+            setActivities(sorted);
+            const primary = sorted[0];
+            const stravaMatch: StravaMatch = {
+              strava_id: primary.strava_id,
+              sport_type: primary.sport_type,
+              distance_km: primary.distance_m / 1000,
+              moving_time_min: primary.moving_time_s / 60,
+              avg_heartrate: primary.avg_heartrate,
+              max_heartrate: primary.max_heartrate,
+            };
+            setReconcileResult(reconcile(plannedSession ?? null, stravaMatch));
           } else if (plannedSession !== undefined) {
             setReconcileResult(reconcile(plannedSession ?? null, null));
           }
