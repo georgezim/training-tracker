@@ -39,6 +39,8 @@ jobs:
             tests/e2e/onboarding-beginner.spec.ts \
             tests/e2e/week-navigation.spec.ts \
             tests/e2e/weekly-review.spec.ts \
+            tests/e2e/activity-feedback.spec.ts \
+            tests/e2e/smoke-gemini.spec.ts \
             --reporter=json 2>/dev/null || true
 
       - name: Build email report
