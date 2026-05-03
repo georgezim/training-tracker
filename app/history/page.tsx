@@ -15,11 +15,11 @@ const FEELING_EMOJI: Record<string, string> = {
 
 type Tier = 'green' | 'yellow' | 'red' | 'gray';
 
-function tier(value: number | null, type: 'recovery' | 'sleep' | 'achilles'): Tier {
+function tier(value: number | null, type: 'recovery' | 'sleep' | 'injury'): Tier {
   if (value === null) return 'gray';
   if (type === 'recovery') return value >= 70 ? 'green' : value >= 33 ? 'yellow' : 'red';
   if (type === 'sleep')    return value >= 70 ? 'green' : value >= 50 ? 'yellow' : 'red';
-  if (type === 'achilles') return value === 0 ? 'green' : value <= 3 ? 'yellow' : 'red';
+  if (type === 'injury')   return value === 0 ? 'green' : value <= 3 ? 'yellow' : 'red';
   return 'gray';
 }
 
@@ -147,7 +147,7 @@ export default function HistoryPage() {
                   <Badge label="Sleep" value={`${ci.sleep_hours}h`} t={ci.sleep_hours >= 7 ? 'green' : ci.sleep_hours >= 5.5 ? 'yellow' : 'red'} />
                 )}
                 {ci.achilles_pain != null && (
-                  <Badge label="Achilles" value={`${ci.achilles_pain}/10`} t={tier(ci.achilles_pain, 'achilles')} />
+                  <Badge label="Injury" value={`${ci.achilles_pain}/10`} t={tier(ci.achilles_pain, 'injury')} />
                 )}
               </div>
 

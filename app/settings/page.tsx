@@ -311,7 +311,7 @@ export default function SettingsPage() {
             Injuries / limitations <span className="text-gray-600">(optional)</span>
           </label>
           <textarea value={injuryNotes} onChange={e => setInjuryNotes(e.target.value.slice(0, 200))}
-            rows={2} placeholder="e.g. bad knee, achilles pain…"
+            rows={2} placeholder="e.g. bad knee, tendon pain, shoulder injury…"
             className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
         </div>
 

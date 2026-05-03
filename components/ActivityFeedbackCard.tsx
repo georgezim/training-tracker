@@ -4,7 +4,7 @@ interface Props {
   feedback: {
     summary: string;
     effort_rating: 'too_easy' | 'right' | 'too_hard';
-    achilles_flag: boolean;
+    injury_flag: boolean;
     tip: string;
   };
   onDismiss: () => void;
@@ -56,11 +56,11 @@ export default function ActivityFeedbackCard({ feedback, onDismiss }: Props) {
         {effortData.label}
       </div>
 
-      {/* Achilles warning banner */}
-      {feedback.achilles_flag && (
+      {/* Injury load warning banner */}
+      {feedback.injury_flag && (
         <div className="bg-orange-950/60 border border-orange-700/40 rounded-xl px-3 py-2 mt-3">
           <p className="text-orange-300 text-xs font-semibold">
-            ⚠️ Achilles load flag — monitor recovery tonight
+            ⚠️ High injury load — monitor recovery tonight
           </p>
         </div>
       )}

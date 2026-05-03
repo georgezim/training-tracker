@@ -704,8 +704,8 @@ function parseGymDescription(desc: string): { warmupDuration: string; exercises:
 }
 
 // Goal-specific key points for each workout type
-function goalKeyPoints(goal: string | null, type: WorkoutType, hasAchilles: boolean): string[] {
-  const achillesTip = hasAchilles
+function goalKeyPoints(goal: string | null, type: WorkoutType, hasInjury: boolean): string[] {
+  const injuryTip = hasInjury
     ? 'Eccentric heel drops before finishing — lower on one foot, 4 sec down, 3×15 each leg'
     : null;
 
@@ -739,7 +739,7 @@ function goalKeyPoints(goal: string | null, type: WorkoutType, hasAchilles: bool
           ];
       }
     })();
-    if (achillesTip) base.push(achillesTip);
+    if (injuryTip) base.push(injuryTip);
     return base;
   }
 
@@ -812,7 +812,7 @@ function goalKeyPoints(goal: string | null, type: WorkoutType, hasAchilles: bool
 export function getWorkoutDetail(date: Date, profile?: PlanProfile | null): WorkoutDetail {
   const workout = getWorkoutForDateWithProfile(date, profile);
   const goal = profile?.goal ?? null;
-  const hasAchilles = !!(profile?.injuryNotes?.toLowerCase().includes('achilles'));
+  const hasInjury = !!(profile?.injuryNotes);
 
   if (workout.type === 'race') {
     return {
@@ -875,7 +875,7 @@ export function getWorkoutDetail(date: Date, profile?: PlanProfile | null): Work
         { icon: '🚶', title: 'Warm-up', detail: '5–10min brisk walk, then 5min easy jog before picking up pace. Don\'t skip — cold muscles get injured.' },
         { icon: '🏃', title: workout.label, detail: workout.description },
         { icon: '🚶', title: 'Cool-down', detail: '5min easy walk. Stretch calves, quads, hip flexors, and hamstrings while still warm.' },
-        ...(hasAchilles ? [{ icon: '🦵', title: 'Achilles care', detail: 'Eccentric heel drops: stand on a step, rise on both feet, lower slowly on one foot (4 sec down). 3×15 each leg.' }] : []),
+        ...(hasInjury ? [{ icon: '🦵', title: 'Injury care', detail: 'Eccentric heel drops: stand on a step, rise on both feet, lower slowly on one foot (4 sec down). 3×15 each leg.' }] : []),
       ],
       keyPoints: goalKeyPoints(goal, 'run', false),
     };
@@ -893,7 +893,7 @@ export function getWorkoutDetail(date: Date, profile?: PlanProfile | null): Work
         { icon: '🔥', title: `Warm-up — ${warmupDuration}`, detail: 'Dynamic warm-up: leg swings, hip circles, arm circles, 10 bodyweight squats, 10 glute bridges. Gets blood flowing and joints mobile.' },
         { icon: '🏋️', title: 'Main workout', detail: exerciseDetail },
         { icon: '🧘', title: 'Cool-down', detail: 'Foam roll quads, hamstrings, calves. Static stretches: 30 sec each. Eat protein within 30min.' },
-        ...(hasAchilles ? [{ icon: '🦵', title: 'Eccentric heel drops', detail: 'Stand on a step, rise on both feet, lower slowly on one foot (4 sec down). 3×15 each leg. Builds Achilles tendon resilience.' }] : []),
+        ...(hasInjury ? [{ icon: '🦵', title: 'Injury care', detail: 'Stand on a step, rise on both feet, lower slowly on one foot (4 sec down). 3×15 each leg. Builds tendon resilience.' }] : []),
       ],
       keyPoints: goalKeyPoints(goal, 'gym', false),
     };

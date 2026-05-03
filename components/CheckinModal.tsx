@@ -5,13 +5,13 @@ import { supabase, DailyCheckin, FeelingType, UserProfile } from '@/lib/supabase
 import { getWorkoutForDateWithProfile, PlanProfile } from '@/lib/training-plan';
 
 function isRedCheckin(
-  whoop: number, sleep: number, sleepHours: number, achilles: number,
+  whoop: number, sleep: number, sleepHours: number, injuryPain: number,
   feeling: FeelingType, hasTracker: boolean, hasInjuryNotes: boolean
 ): boolean {
   if (hasTracker && whoop < 33) return true;
   if (hasTracker && sleep < 33) return true;
   if (!hasTracker && sleepHours < 6) return true;
-  if (hasInjuryNotes && achilles >= 4) return true;
+  if (hasInjuryNotes && injuryPain >= 4) return true;
   if (feeling === 'bad' || feeling === 'injured') return true;
   return false;
 }
@@ -41,15 +41,15 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, i
   const [whoop, setWhoop]           = useState(70);
   const [sleep, setSleep]           = useState(70);
   const [sleepHours, setSleepHours] = useState(7);
-  const [achilles, setAchilles]     = useState(0);
+  const [injuryPain, setInjuryPain] = useState(0);
   const [feeling, setFeeling]       = useState<FeelingType>('good');
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState('');
 
-  const recoveryTier = whoop >= 70 ? '#22c55e' : whoop >= 33 ? '#facc15' : '#ef4444';
-  const sleepTier    = sleep >= 70 ? '#22c55e' : sleep >= 50 ? '#facc15' : '#ef4444';
-  const sleepHrColor = sleepHours >= 7 ? '#22c55e' : sleepHours >= 5.5 ? '#facc15' : '#ef4444';
-  const achillesColor = achilles === 0 ? '#22c55e' : achilles <= 3 ? '#facc15' : '#ef4444';
+  const recoveryTier    = whoop >= 70 ? '#22c55e' : whoop >= 33 ? '#facc15' : '#ef4444';
+  const sleepTier       = sleep >= 70 ? '#22c55e' : sleep >= 50 ? '#facc15' : '#ef4444';
+  const sleepHrColor    = sleepHours >= 7 ? '#22c55e' : sleepHours >= 5.5 ? '#facc15' : '#ef4444';
+  const injuryPainColor = injuryPain === 0 ? '#22c55e' : injuryPain <= 3 ? '#facc15' : '#ef4444';
 
   function sliderBg(color: string, val: number, min: number, max: number) {
     const pct = ((val - min) / (max - min)) * 100;
@@ -64,7 +64,7 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, i
       feeling,
     };
     if (profile?.injury_notes) {
-      payload.achilles_pain = achilles;
+      payload.achilles_pain = injuryPain;
     }
     if (hasTracker) {
       payload.whoop_recovery = whoop;
@@ -95,7 +95,7 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, i
         // 1. Not in the runway/preparation period
         // 2. Metrics are in the red zone (meaningful intervention needed)
         const red = isRedCheckin(
-          whoop, sleep, sleepHours, achilles, feeling,
+          whoop, sleep, sleepHours, injuryPain, feeling,
           hasTracker, !!profile?.injury_notes
         );
 
@@ -188,10 +188,10 @@ export default function CheckinModal({ profile, planProfile, userId, todayStr, i
               <div className="bg-gray-900 rounded-2xl p-4">
                 <div className="flex justify-between mb-2">
                   <span className="text-white text-sm font-semibold">Pain Level</span>
-                  <span className="text-xl font-bold" style={{ color: achillesColor }}>{achilles}/10</span>
+                  <span className="text-xl font-bold" style={{ color: injuryPainColor }}>{injuryPain}/10</span>
                 </div>
-                <input type="range" min={0} max={10} value={achilles} onChange={e => setAchilles(+e.target.value)}
-                  className="w-full" style={{ background: sliderBg(achillesColor, achilles, 0, 10) }} />
+                <input type="range" min={0} max={10} value={injuryPain} onChange={e => setInjuryPain(+e.target.value)}
+                  className="w-full" style={{ background: sliderBg(injuryPainColor, injuryPain, 0, 10) }} />
                 <p className="text-gray-600 text-xs mt-1">{profile.injury_notes}</p>
               </div>
             )}

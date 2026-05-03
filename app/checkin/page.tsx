@@ -61,7 +61,7 @@ export default function CheckinPage() {
   // Non-tracker users
   const [sleepHours, setSleepHours] = useState(7);
   // Common
-  const [achilles, setAchilles] = useState(0);
+  const [injuryPain, setInjuryPain] = useState(0);
   const [feeling, setFeeling]   = useState<FeelingType>('good');
   const [notes, setNotes]       = useState('');
 
@@ -85,7 +85,7 @@ export default function CheckinPage() {
         if (c.whoop_recovery != null) setWhoop(c.whoop_recovery);
         if (c.sleep_score    != null) setSleep(c.sleep_score);
         if (c.sleep_hours    != null) setSleepHours(c.sleep_hours);
-        if (c.achilles_pain  != null) setAchilles(c.achilles_pain);
+        if (c.achilles_pain  != null) setInjuryPain(c.achilles_pain);
         if (c.feeling)               setFeeling(c.feeling);
         if (c.notes)                 setNotes(c.notes);
       }
@@ -109,7 +109,7 @@ export default function CheckinPage() {
       notes: notes.trim() || null,
     };
     if (profile?.injury_notes) {
-      payload.achilles_pain = achilles;
+      payload.achilles_pain = injuryPain;
     }
 
     if (hasTracker) {
@@ -183,7 +183,7 @@ export default function CheckinPage() {
   const recoveryTier = whoop >= 70 ? 'green' : whoop >= 33 ? 'yellow' : 'red';
   const sleepTier    = sleep  >= 70 ? 'green' : sleep  >= 50 ? 'yellow' : 'red';
   const sleepHrTier  = sleepHours >= 7 ? 'green' : sleepHours >= 5.5 ? 'yellow' : 'red';
-  const achillesTier = achilles === 0 ? 'green' : achilles <= 3 ? 'yellow' : 'red';
+  const injuryTier = injuryPain === 0 ? 'green' : injuryPain <= 3 ? 'yellow' : 'red';
 
   if (loading) {
     return (
@@ -222,10 +222,10 @@ export default function CheckinPage() {
 
         {profile?.injury_notes && (
           <div>
-            <Slider label="Pain Level" value={achilles} min={0} max={10} unit="/10" tier={achillesTier} onChange={setAchilles}
+            <Slider label="Pain Level" value={injuryPain} min={0} max={10} unit="/10" tier={injuryTier} onChange={setInjuryPain}
               ticks={['0 None', '5 Moderate', '10 Severe']} />
             <p className="text-gray-600 text-xs mt-1 px-1">{profile.injury_notes}</p>
-            {achilles > 3 && (
+            {injuryPain > 3 && (
               <p className="text-red-400 text-xs mt-2 px-1">⚠️ Pain above 3/10 — consider reducing load. Ice post-session.</p>
             )}
           </div>
