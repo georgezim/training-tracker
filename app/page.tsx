@@ -20,7 +20,7 @@ import {
 } from '@/lib/training-plan';
 import BottomNav from '@/components/BottomNav';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
-import StravaActivityCard from '@/components/StravaActivityCard';
+import StravaActivityCard, { FeedbackInline } from '@/components/StravaActivityCard';
 import { useStravaActivity } from '@/lib/useStravaActivity';
 import AvatarCropModal from '@/components/AvatarCropModal';
 import MismatchFeedbackSheet from '@/components/MismatchFeedbackSheet';
@@ -156,12 +156,7 @@ export default function TodayPage() {
   const [showRunwayDetail, setShowRunwayDetail] = useState(false);
   const [showMismatchSheet, setShowMismatchSheet] = useState(false);
   const [showManualSheet, setShowManualSheet] = useState<false | 'mark_done' | 'edit' | 'rest_day_log'>(false);
-  const [activityFeedback, setActivityFeedback] = useState<{
-    summary: string;
-    effort_rating: 'too_easy' | 'right' | 'too_hard';
-    injury_flag: boolean;
-    tip: string;
-  } | null>(null);
+  const [activityFeedback, setActivityFeedback] = useState<FeedbackInline | null>(null);
   const [weekSessions, setWeekSessions] = useState<CompletedSession[]>([]);
   const [weeklyReport, setWeeklyReport] = useState<{ report: WeeklyReport; weekStart: string; weekEnd: string } | null>(null);
   const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(false);
@@ -383,21 +378,21 @@ export default function TodayPage() {
         }
       }
 
-      // Show weekly report card on Sunday evening or Monday morning
+      // Show weekly report card on Monday morning only (force fresh — bust any stale Sunday cache)
       const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon
       const hourOfDay = today.getHours();
-      const isReportTime = (dayOfWeek === 0 && hourOfDay >= 18) || (dayOfWeek === 1 && hourOfDay < 12);
+      const isReportTime = dayOfWeek === 1 && hourOfDay < 12;
       if (isReportTime && user) {
-        // Get Monday of last week (or this week's Monday if it's Sunday)
+        // Always use last Monday (7 days ago from this Monday)
         const monday = new Date(today);
-        monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : 0));
+        monday.setDate(today.getDate() - 7);
         monday.setHours(0, 0, 0, 0);
         const weekStart = monday.toISOString().split('T')[0];
 
         fetch('/api/weekly-report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id, weekStart }),
+          body: JSON.stringify({ userId: user.id, weekStart, force: true }),
         })
           .then(r => r.json())
           .then(data => {
@@ -759,14 +754,30 @@ export default function TodayPage() {
           </div>
         )}
 
+        {/* ── TODAY'S PLAN section label ── */}
+        {!inRunway && profile?.custom_plan && (
+          <p className="text-gray-500 text-xs font-semibold uppercase tracking-widest mt-2 mb-2 px-1">
+            Today's plan
+          </p>
+        )}
+
         {/* ── Rest day activity banner — shown when user trained on a rest day ── */}
         {!inRunway && profile?.custom_plan && workout.type === 'rest' && reconcileResult?.status === 'rest_day_activity' && activities.length > 0 && (
-          <div className="bg-blue-950/40 border border-blue-700/40 rounded-2xl p-4 mb-3">
-            <p className="text-blue-300 text-sm font-semibold mb-2">💪 You trained on a rest day</p>
-            <div className="space-y-2">
-              {activities.map(act => (
-                <StravaActivityCard key={act.strava_id} activity={act} />
-              ))}
+          <div className="rounded-2xl overflow-hidden border border-blue-800/50 mb-1">
+            {/* Summary header */}
+            <div className="bg-blue-950 px-4 py-3 flex items-start gap-3">
+              <span className="text-xl leading-none mt-0.5">💪</span>
+              <div>
+                <p className="text-white font-bold text-base leading-tight">You trained on a rest day</p>
+                <p className="text-blue-300/70 text-sm mt-0.5">
+                  {activities.length} {activities.length === 1 ? 'activity' : 'activities'} logged via Strava
+                </p>
+              </div>
+            </div>
+            {/* Originally scheduled */}
+            <div className="bg-blue-950/40 border-t border-blue-800/40 px-4 py-2.5">
+              <p className="text-blue-300/50 text-xs mb-0.5">Originally scheduled</p>
+              <p className="text-white/80 text-sm font-medium">Rest — recovery day</p>
             </div>
           </div>
         )}
@@ -802,41 +813,13 @@ export default function TodayPage() {
 
             {workout.type === 'rest' && (
               <div className="mt-4" onClick={e => e.stopPropagation()}>
-                {/* State A — Strava not connected */}
-                {!stravaConnected && (
-                  <>
-                    <button
-                      onClick={() => setShowManualSheet('rest_day_log')}
-                      className="w-full py-2.5 bg-white text-black rounded-lg text-sm font-medium"
-                    >
-                      Log activity manually
-                    </button>
-                    <hr className="border-t border-white/10 my-3" />
-                    <button
-                      onClick={() => { window.location.href = '/api/strava/auth'; }}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-white/20 rounded-lg"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
-                      <span className="text-xs text-white/50">Connect Strava to auto-sync</span>
-                    </button>
-                  </>
-                )}
-                {/* State B — Strava connected, no activity today */}
-                {stravaConnected && activities.length === 0 && reconcileResult?.status !== 'rest_day_activity' && (
-                  <>
-                    <button
-                      onClick={() => setShowManualSheet('rest_day_log')}
-                      className="w-full py-2.5 border border-white/20 text-white/60 rounded-lg text-sm"
-                    >
-                      Log manually instead
-                    </button>
-                    <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg mt-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500/40 border border-green-500" />
-                      <span className="text-xs text-white/50 flex-1">Strava connected</span>
-                      <span className="text-xs text-white/30">No activity today</span>
-                    </div>
-                  </>
-                )}
+                <p className="text-white/40 text-xs mb-3">Did you train today?</p>
+                <button
+                  onClick={() => setShowManualSheet('rest_day_log')}
+                  className="w-full py-3 bg-white text-black rounded-xl text-sm font-bold active:scale-95 transition-transform"
+                >
+                  Log activity manually
+                </button>
               </div>
             )}
 
@@ -952,26 +935,30 @@ export default function TodayPage() {
           </div>
         )}
 
-        {activities.length > 0 && reconcileResult?.status !== 'mismatch' && reconcileResult?.status !== 'rest_day_activity' && (
-          <div className="space-y-3">
-            {activities.map((act, i) => (
-              <StravaActivityCard
-                key={act.strava_id}
-                activity={act}
-                plannedKm={i === 0 ? (() => {
-                  const m = workout.label.match(/(\d+\.?\d*)km/);
-                  return m ? parseFloat(m[1]) : undefined;
-                })() : undefined}
-              />
-            ))}
+        {/* ── Activities (training day match, or rest day activities) ── */}
+        {activities.length > 0 && reconcileResult?.status !== 'mismatch' && (
+          <div>
+            {/* Section label — shown for multi-activity or rest day cases */}
+            {(activities.length > 1 || reconcileResult?.status === 'rest_day_activity') && (
+              <p className="text-gray-500 text-xs font-semibold uppercase tracking-widest mb-2 px-1">
+                Activities ({activities.length})
+              </p>
+            )}
+            <div className="space-y-2">
+              {activities.map((act, i) => (
+                <StravaActivityCard
+                  key={act.strava_id}
+                  activity={act}
+                  feedback={i === 0 ? activityFeedback : null}
+                  plannedKm={
+                    i === 0 && workout.label.match(/(\d+\.?\d*)km/)
+                      ? parseFloat(workout.label.match(/(\d+\.?\d*)km/)![1])
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
           </div>
-        )}
-
-        {activityFeedback && (
-          <ActivityFeedbackCard
-            feedback={activityFeedback}
-            onDismiss={() => setActivityFeedback(null)}
-          />
         )}
 
         {/* ── Today's Check-in ── */}
