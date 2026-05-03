@@ -34,12 +34,12 @@ jobs:
       - name: Run gold path tests (JSON output)
         id: run_tests
         run: |
-          npx playwright test \
+          PLAYWRIGHT_JSON_OUTPUT_NAME=test-results.json npx playwright test \
             tests/e2e/auth.spec.ts \
             tests/e2e/onboarding-beginner.spec.ts \
             tests/e2e/week-navigation.spec.ts \
             tests/e2e/weekly-review.spec.ts \
-            --reporter=json 2>/dev/null > test-results.json || true
+            --reporter=json 2>/dev/null || true
 
       - name: Build email report
         id: report
