@@ -48,8 +48,11 @@ export function useStravaActivity(date: string, plannedSession?: PlannedSession 
               max_heartrate: primary.max_heartrate,
             };
             setReconcileResult(reconcile(plannedSession ?? null, stravaMatch));
-          } else if (plannedSession !== undefined) {
-            setReconcileResult(reconcile(plannedSession ?? null, null));
+          } else {
+            setActivities([]);
+            if (plannedSession !== undefined) {
+              setReconcileResult(reconcile(plannedSession ?? null, null));
+            }
           }
         }
       } catch {

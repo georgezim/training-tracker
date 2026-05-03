@@ -60,7 +60,7 @@ function toRow(a: any, userId: string) {
   return {
     user_id: userId,
     strava_id: a.id,
-    activity_date: a.start_date_local.slice(0, 10),
+    activity_date: a.start_date_local ? a.start_date_local.slice(0, 10) : '',
     start_time: a.start_date_local ? a.start_date_local.slice(11, 16) : null,
     name: a.name,
     sport_type: a.sport_type,
