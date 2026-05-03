@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { userId, weekStart } = body as { userId: string; weekStart: string };
+    const { userId, weekStart, force } = body as { userId: string; weekStart: string; force?: boolean };
 
     if (!userId || !weekStart) {
       return NextResponse.json({ error: 'userId and weekStart are required' }, { status: 400 });
@@ -53,13 +53,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (existing) {
-      console.log('[weekly-report] Returning cached report for week:', weekStart);
-      return NextResponse.json({
-        report: existing.report_data,
-        weekStart: existing.week_start,
-        weekEnd: existing.week_end,
-        cached: true,
-      });
+      if (!force) {
+        console.log('[weekly-report] Returning cached report for week:', weekStart);
+        return NextResponse.json({
+          report: existing.report_data,
+          weekStart: existing.week_start,
+          weekEnd: existing.week_end,
+          cached: true,
+        });
+      }
+      // Delete stale cache so Monday always gets fresh data
+      await supabase.from('weekly_reports').delete().eq('user_id', userId).eq('week_start', weekStart);
     }
 
     // Fetch all week data in parallel
@@ -77,8 +81,8 @@ export async function POST(req: NextRequest) {
         .gte('session_date', weekStart)
         .lte('session_date', weekEnd),
       supabase
-        .from('strava_activities_cache')
-        .select('activity_date, sport_type, distance_m, duration_sec, avg_heartrate, avg_pace')
+        .from('strava_activities')
+        .select('activity_date, sport_type, distance_m, moving_time_s, avg_heartrate, avg_speed_ms')
         .eq('user_id', userId)
         .gte('activity_date', weekStart)
         .lte('activity_date', weekEnd),
@@ -102,14 +106,13 @@ export async function POST(req: NextRequest) {
     const profile   = profileRes.data;
 
     // Compute summary metrics for prompt context
-    const sessionsCompleted = sessions.filter(s => s.status === 'done').length;
-    const sessionsPlanned   = sessions.length; // all fetched sessions were planned
+    const doneDates   = new Set(sessions.filter(s => s.status === 'done').map(s => s.session_date));
+    const stravaDates = new Set(strava.map(a => a.activity_date));
+    const sessionsCompleted = new Set([...Array.from(doneDates), ...Array.from(stravaDates)]).size;
+    const sessionsPlanned   = profile?.days_per_week ?? 4;
 
-    const runActivities = strava.filter(a =>
-      ['Run', 'TrailRun', 'VirtualRun'].includes(a.sport_type ?? '')
-    );
     const totalDistanceKm = Math.round(
-      runActivities.reduce((sum, a) => sum + (a.distance_m ?? 0), 0) / 100
+      strava.reduce((sum, a) => sum + (a.distance_m ?? 0), 0) / 100
     ) / 10;
 
     const recoveryValues = checkins
@@ -145,7 +148,7 @@ ${sessions.length === 0 ? '- No sessions recorded' : sessions.map(s =>
 
 STRAVA ACTIVITIES:
 ${strava.length === 0 ? '- No Strava activities logged' : strava.map(a =>
-  `- ${a.activity_date}: ${a.sport_type} — ${a.distance_m ? (a.distance_m / 1000).toFixed(2) + 'km' : 'no distance'}${a.duration_sec ? `, ${Math.round(a.duration_sec / 60)}min` : ''}${a.avg_heartrate ? `, avg HR ${Math.round(a.avg_heartrate)}bpm` : ''}${a.avg_pace ? `, pace ${a.avg_pace}` : ''}`
+  `- ${a.activity_date}: ${a.sport_type} — ${a.distance_m ? (a.distance_m / 1000).toFixed(2) + 'km' : 'no distance'}${a.moving_time_s ? `, ${Math.round(a.moving_time_s / 60)}min` : ''}${a.avg_heartrate ? `, avg HR ${Math.round(a.avg_heartrate)}bpm` : ''}`
 ).join('\n')}
 
 ${overrides.length > 0 ? `PLAN DEVIATIONS:
@@ -159,8 +162,9 @@ ${checkins.length === 0 ? '- No check-ins recorded' : checkins.map(c =>
 ).join('\n')}
 
 KEY METRICS:
-- Sessions completed: ${sessionsCompleted} / ${sessionsPlanned}
-- Total run distance (Strava): ${totalDistanceKm}km
+- Sessions completed: ${sessionsCompleted} / ${sessionsPlanned} (Strava auto-detected + manual)
+- Total distance all sports (Strava): ${totalDistanceKm}km
+- Rest day training: ${strava.filter(a => !sessions.some(s => s.session_date === a.activity_date)).length} Strava activities on scheduled rest days
 - Avg recovery score: ${avgRecovery ?? 'N/A'}/100
 - Avg injury pain: ${avgInjuryPain ?? 'N/A'}/10
 
