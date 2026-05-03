@@ -1,27 +1,13 @@
 'use client';
 
 import { metersToKm, mpsToMinPerKm } from '@/lib/strava';
+import type { CachedActivity } from '@/lib/useStravaActivity';
 
 export interface FeedbackInline {
   summary: string;
   effort_rating: 'too_easy' | 'right' | 'too_hard';
   injury_flag: boolean;
   tip: string;
-}
-
-interface CachedActivity {
-  strava_id: number;
-  activity_date: string;
-  start_time?: string | null;
-  name: string;
-  sport_type: string;
-  distance_m: number;
-  moving_time_s: number;
-  elevation_m: number;
-  avg_heartrate?: number;
-  max_heartrate?: number;
-  avg_speed_ms: number;
-  strava_url: string;
 }
 
 interface Props {
@@ -72,7 +58,7 @@ export default function StravaActivityCard({ activity, feedback, plannedKm }: Pr
           <p className="text-gray-500 text-xs mt-0.5">
             {activity.start_time ? `${activity.start_time} · ` : ''}Strava
             {diffStr && (
-              <span className={diff != null && diff >= -1 ? ' text-green-400' : ' text-yellow-400'}>
+              <span className={diff != null && diff >= -1 && diff <= 1 ? ' text-green-400' : ' text-yellow-400'}>
                 {' · '}{diffStr}
               </span>
             )}
