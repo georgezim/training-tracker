@@ -24,7 +24,6 @@ import StravaActivityCard, { FeedbackInline } from '@/components/StravaActivityC
 import { useStravaActivity } from '@/lib/useStravaActivity';
 import AvatarCropModal from '@/components/AvatarCropModal';
 import MismatchFeedbackSheet from '@/components/MismatchFeedbackSheet';
-import ActivityFeedbackCard from '@/components/ActivityFeedbackCard';
 import ManualActivitySheet, { ManualActivityData } from '@/components/ManualActivitySheet';
 import { PlannedSession, StravaMatch } from '@/lib/reconcile';
 import WeeklyReportCard from '@/components/WeeklyReportCard';
@@ -789,27 +788,47 @@ export default function TodayPage() {
         >
           <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-white to-transparent" />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">
-                {workout.type === 'rest' ? 'Rest Day' : workout.type}
-              </span>
-              {checkin?.ai_coach_title && (
-                <span className="text-xs font-medium text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded-full">✦ Adapted by AI</span>
-              )}
-              {session && (
-                <span className="flex items-center gap-1 text-xs text-green-300 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-                  Done
-                </span>
-              )}
-            </div>
-            <h2 className="text-white text-2xl font-bold leading-tight">
-              {checkin?.ai_coach_title ?? workout.label}
-            </h2>
-            <p className="text-white/75 text-sm mt-2 leading-relaxed">
-              {checkin?.ai_coach_description ?? workout.description}
-            </p>
-            <p className="text-white/40 text-xs mt-2">Tap for full workout details →</p>
+            {workout.type === 'rest' ? (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl leading-none">🌙</span>
+                  <div>
+                    <p className="text-white/60 text-xs font-semibold uppercase tracking-widest">Rest day</p>
+                    <h2 className="text-white text-xl font-bold leading-tight">
+                      {checkin?.ai_coach_title ?? 'Rest day'}
+                    </h2>
+                    <p className="text-white/60 text-sm mt-0.5">
+                      {checkin?.ai_coach_description ?? 'Recovery — no session planned'}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-white/30 text-xs">Tap for full workout details →</p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">
+                    {workout.type}
+                  </span>
+                  {checkin?.ai_coach_title && (
+                    <span className="text-xs font-medium text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded-full">✦ Adapted by AI</span>
+                  )}
+                  {session && (
+                    <span className="flex items-center gap-1 text-xs text-green-300 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                      Done
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-white text-2xl font-bold leading-tight">
+                  {checkin?.ai_coach_title ?? workout.label}
+                </h2>
+                <p className="text-white/75 text-sm mt-2 leading-relaxed">
+                  {checkin?.ai_coach_description ?? workout.description}
+                </p>
+                <p className="text-white/40 text-xs mt-2">Tap for full workout details →</p>
+              </>
+            )}
 
             {workout.type === 'rest' && (
               <div className="mt-4" onClick={e => e.stopPropagation()}>

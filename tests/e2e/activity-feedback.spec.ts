@@ -145,8 +145,7 @@ test.describe('Activity feedback card', () => {
 
     await expect(page.getByText('Coach feedback')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Great steady run at the right pace')).toBeVisible();
-    await expect(page.getByText('Effort: Just right')).toBeVisible();
-    await expect(page.getByText('Keep the easy days truly easy')).toBeVisible();
+    await expect(page.getByText('Effort: right')).toBeVisible();
   });
 
   test('shows injury warning when injury_flag is true', async ({ page }) => {
@@ -158,7 +157,7 @@ test.describe('Activity feedback card', () => {
     });
 
     await expect(page.getByText('Coach feedback')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Effort: Too hard')).toBeVisible();
+    await expect(page.getByText('Effort: too hard')).toBeVisible();
     await expect(page.getByText('High injury load — monitor recovery tonight')).toBeVisible();
   });
 
@@ -202,16 +201,16 @@ test.describe('Activity feedback card', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('dismiss button removes the feedback card', async ({ page }) => {
+  test('too_easy effort renders with correct label', async ({ page }) => {
+    // Inline feedback shows all three effort states — verify too_easy renders
     await loginWithMocks(page, {
-      summary: 'Solid session.',
-      effort_rating: 'right',
+      summary: 'Very comfortable session, you have more in the tank.',
+      effort_rating: 'too_easy',
       injury_flag: false,
-      tip: 'Stay consistent.',
+      tip: 'Push a bit harder next time.',
     });
 
     await expect(page.getByText('Coach feedback')).toBeVisible({ timeout: 10000 });
-    await page.getByRole('button', { name: 'Dismiss feedback' }).click();
-    await expect(page.getByText('Coach feedback')).not.toBeVisible();
+    await expect(page.getByText('Effort: too easy')).toBeVisible();
   });
 });

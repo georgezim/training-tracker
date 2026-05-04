@@ -69,10 +69,10 @@ export async function POST(req: NextRequest) {
     const [sessionsRes, overridesRes, stravaRes, checkinsRes, profileRes] = await Promise.all([
       supabase
         .from('completed_sessions')
-        .select('session_date, session_type, status, distance_km, duration_min')
+        .select('date, session_type, status, distance_km, duration_min')
         .eq('user_id', userId)
-        .gte('session_date', weekStart)
-        .lte('session_date', weekEnd),
+        .gte('date', weekStart)
+        .lte('date', weekEnd),
       supabase
         .from('session_overrides')
         .select('session_date, planned_type, actual_type, feedback_tags, feedback_notes')
@@ -87,10 +87,10 @@ export async function POST(req: NextRequest) {
         .lte('activity_date', weekEnd),
       supabase
         .from('daily_checkins')
-        .select('checkin_date, whoop_recovery, achilles_pain, sleep_hours, notes')
+        .select('date, whoop_recovery, achilles_pain, sleep_hours, notes')
         .eq('user_id', userId)
-        .gte('checkin_date', weekStart)
-        .lte('checkin_date', weekEnd),
+        .gte('date', weekStart)
+        .lte('date', weekEnd),
       supabase
         .from('profiles')
         .select('goal, training_level, target_race, race_date, days_per_week')
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const profile   = profileRes.data;
 
     // Compute summary metrics for prompt context
-    const doneDates   = new Set(sessions.filter(s => s.status === 'done').map(s => s.session_date));
+    const doneDates   = new Set(sessions.filter(s => s.status === 'done').map(s => s.date));
     const stravaDates = new Set(strava.map(a => a.activity_date));
     const sessionsCompleted = new Set([...Array.from(doneDates), ...Array.from(stravaDates)]).size;
     const sessionsPlanned   = profile?.days_per_week ?? 4;
@@ -142,7 +142,7 @@ WEEK: ${weekStart} to ${weekEnd}
 
 SESSIONS (from training plan):
 ${sessions.length === 0 ? '- No sessions recorded' : sessions.map(s =>
-  `- ${s.session_date}: ${s.session_type ?? 'session'} — status: ${s.status}${s.distance_km ? `, ${s.distance_km}km` : ''}${s.duration_min ? `, ${s.duration_min}min` : ''}`
+  `- ${s.date}: ${s.session_type ?? 'session'} — status: ${s.status}${s.distance_km ? `, ${s.distance_km}km` : ''}${s.duration_min ? `, ${s.duration_min}min` : ''}`
 ).join('\n')}
 
 STRAVA ACTIVITIES:
@@ -157,13 +157,13 @@ ${overrides.map(o =>
 ` : ''}
 DAILY CHECK-INS:
 ${checkins.length === 0 ? '- No check-ins recorded' : checkins.map(c =>
-  `- ${c.checkin_date}: recovery=${c.whoop_recovery ?? 'N/A'}/100, injury pain=${c.achilles_pain ?? 'N/A'}/10${c.sleep_hours ? `, sleep ${c.sleep_hours}h` : ''}${c.notes ? `, notes: "${c.notes}"` : ''}`
+  `- ${c.date}: recovery=${c.whoop_recovery ?? 'N/A'}/100, injury pain=${c.achilles_pain ?? 'N/A'}/10${c.sleep_hours ? `, sleep ${c.sleep_hours}h` : ''}${c.notes ? `, notes: "${c.notes}"` : ''}`
 ).join('\n')}
 
 KEY METRICS:
 - Sessions completed: ${sessionsCompleted} / ${sessionsPlanned} (Strava auto-detected + manual)
 - Total distance all sports (Strava): ${totalDistanceKm}km
-- Unscheduled Strava activities: ${strava.filter(a => !sessions.some(s => s.session_date === a.activity_date)).length} (activities on days with no training plan session)
+- Unscheduled Strava activities: ${strava.filter(a => !sessions.some(s => s.date === a.activity_date)).length} (activities on days with no training plan session)
 - Avg recovery score: ${avgRecovery ?? 'N/A'}/100
 - Avg injury pain: ${avgInjuryPain ?? 'N/A'}/10
 
