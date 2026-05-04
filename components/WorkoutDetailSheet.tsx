@@ -2,6 +2,13 @@
 
 import { useEffect } from 'react';
 import { WorkoutInfo, WorkoutDetail, COLOR_BG, COLOR_TEXT } from '@/lib/training-plan';
+import type { CachedActivity } from '@/lib/useStravaActivity';
+
+interface SessionFeedback {
+  summary: string;
+  effort_rating: 'excellent' | 'good' | 'fair' | 'poor';
+  key_point: string;
+}
 
 interface Props {
   workout: WorkoutInfo;
@@ -12,9 +19,12 @@ interface Props {
   onMarkDone?: () => void;
   onEditWorkout?: () => void;
   onLogRestDay?: () => void;   // only shown when workout.type === 'rest'
+  sessionFeedback?: SessionFeedback | null;
+  feedbackLoading?: boolean;
+  stravaActivities?: CachedActivity[];
 }
 
-export default function WorkoutDetailSheet({ workout, detail, dateLabel, onClose, onMarkDone, onEditWorkout, onLogRestDay }: Props) {
+export default function WorkoutDetailSheet({ workout, detail, dateLabel, onClose, onMarkDone, onEditWorkout, onLogRestDay, sessionFeedback, feedbackLoading, stravaActivities }: Props) {
   // Close on backdrop click or Escape key
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -97,6 +107,58 @@ export default function WorkoutDetailSheet({ workout, detail, dateLabel, onClose
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Coach feedback section */}
+          {(sessionFeedback || feedbackLoading) && (
+            <div className="bg-blue-950/30 border border-blue-800/30 rounded-2xl p-4">
+              <p className="text-blue-400 text-xs font-semibold uppercase tracking-widest mb-2">Coach feedback</p>
+
+              {feedbackLoading && (
+                <div className="space-y-2">
+                  <div className="h-3 bg-gray-800 rounded animate-pulse w-full" />
+                  <div className="h-3 bg-gray-800 rounded animate-pulse w-4/5" />
+                </div>
+              )}
+
+              {sessionFeedback && !feedbackLoading && (
+                <>
+                  <p className="text-gray-300 text-sm leading-relaxed mb-3">{sessionFeedback.summary}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-500 text-xs">{sessionFeedback.key_point}</p>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      sessionFeedback.effort_rating === 'excellent' ? 'bg-green-900/60 text-green-400' :
+                      sessionFeedback.effort_rating === 'good'      ? 'bg-blue-900/60 text-blue-400' :
+                      sessionFeedback.effort_rating === 'fair'      ? 'bg-yellow-900/60 text-yellow-400' :
+                                                                      'bg-red-900/60 text-red-400'
+                    }`}>
+                      {sessionFeedback.effort_rating}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Strava activities summary */}
+          {stravaActivities && stravaActivities.length > 0 && (
+            <div className="space-y-2">
+              {stravaActivities.map(act => (
+                <div key={act.strava_id} className="bg-gray-800/60 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-white text-sm font-medium">{act.sport_type}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {act.distance_m ? `${(act.distance_m / 1000).toFixed(1)}km` : ''}
+                      {act.moving_time_s ? ` · ${Math.round(act.moving_time_s / 60)}min` : ''}
+                      {act.avg_heartrate ? ` · ${Math.round(act.avg_heartrate)}bpm` : ''}
+                    </p>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+                  </svg>
+                </div>
+              ))}
             </div>
           )}
 
