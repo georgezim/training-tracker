@@ -384,7 +384,7 @@ export default function TodayPage() {
         const lastMonday = new Date(today);
         lastMonday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7);
         lastMonday.setHours(0, 0, 0, 0);
-        const weekStart = lastMonday.toISOString().split('T')[0];
+        const weekStart = dateToString(lastMonday);
 
         fetch('/api/weekly-report', {
           method: 'POST',
