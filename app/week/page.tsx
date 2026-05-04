@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase, CompletedSession, UserProfile } from '@/lib/supabase';
+import type { CachedActivity } from '@/lib/useStravaActivity';
 import {
   getWorkoutForDateWithProfile,
   getWorkoutDetail,
@@ -34,6 +35,7 @@ export default function WeekPage() {
   const isCurrentWeek = weekOffset === 0;
 
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
+  const [stravaActivities, setStravaActivities] = useState<CachedActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -45,7 +47,14 @@ export default function WeekPage() {
     const thisWeekStart = getWeekStart(today);
     return Math.round((createdWeekStart.getTime() - thisWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
   })();
-  const [selectedDay, setSelectedDay] = useState<{ workout: WorkoutInfo; detail: WorkoutDetail; label: string } | null>(null);
+  const [selectedDay, setSelectedDay] = useState<{
+    workout: WorkoutInfo;
+    detail: WorkoutDetail;
+    label: string;
+    dateStr: string;
+    stravaActivities: CachedActivity[];
+    session: CompletedSession | null;
+  } | null>(null);
 
   // Status action modal
   const [statusAction, setStatusAction] = useState<{ dateStr: string; sessionType: string } | null>(null);
@@ -54,6 +63,15 @@ export default function WeekPage() {
   const [missedReason, setMissedReason] = useState('');
   // View reason
   const [viewReason, setViewReason] = useState<{ reason: string } | null>(null);
+
+  interface SessionFeedback {
+    summary: string;
+    effort_rating: 'excellent' | 'good' | 'fair' | 'poor';
+    key_point: string;
+  }
+
+  const [sessionFeedback, setSessionFeedback] = useState<SessionFeedback | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? {
     goal: profile.goal,
@@ -129,21 +147,79 @@ export default function WeekPage() {
     setLoading(true);
     const startStr = dateToString(days[0]);
     const endStr = dateToString(days[6]);
-    supabase
-      .from('completed_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('date', startStr)
-      .lte('date', endStr)
-      .then(({ data }) => {
-        if (data) setSessions(data as CompletedSession[]);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase
+        .from('completed_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startStr)
+        .lte('date', endStr),
+      supabase
+        .from('strava_activities')
+        .select('strava_id, activity_date, sport_type, distance_m, moving_time_s, avg_heartrate')
+        .eq('user_id', userId)
+        .gte('activity_date', startStr)
+        .lte('activity_date', endStr),
+    ]).then(([sessionsRes, stravaRes]) => {
+      if (sessionsRes.data) setSessions(sessionsRes.data as CompletedSession[]);
+      if (stravaRes.data) setStravaActivities(stravaRes.data as CachedActivity[]);
+      setLoading(false);
+    });
   }, [weekOffset, userId]);
 
   function getSession(dateStr: string, sessionType: string) {
     return sessions.find(s => s.date === dateStr && s.session_type === sessionType) ?? null;
   }
+
+  function getStravaForDate(dateStr: string): CachedActivity[] {
+    return stravaActivities.filter(a => a.activity_date === dateStr);
+  }
+
+  useEffect(() => {
+    if (!selectedDay || !userId) return;
+
+    const hasActivity =
+      selectedDay.session?.status === 'done' ||
+      selectedDay.stravaActivities.length > 0;
+
+    if (!hasActivity) {
+      setSessionFeedback(null);
+      return;
+    }
+
+    setFeedbackLoading(true);
+    setSessionFeedback(null);
+
+    const primaryStrava = selectedDay.stravaActivities[0] ?? null;
+
+    fetch('/api/session-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: selectedDay.dateStr,
+        sessionType: selectedDay.workout.type,
+        plannedLabel: selectedDay.workout.label,
+        stravaActivity: primaryStrava ? {
+          sport_type: primaryStrava.sport_type,
+          distance_m: primaryStrava.distance_m,
+          moving_time_s: primaryStrava.moving_time_s,
+          avg_heartrate: primaryStrava.avg_heartrate,
+          elevation_m: (primaryStrava as unknown as Record<string, unknown>).elevation_m as number | undefined,
+        } : null,
+        manualData: selectedDay.session && !primaryStrava ? {
+          distance_km: (selectedDay.session as unknown as Record<string, unknown>).distance_km,
+          duration_min: (selectedDay.session as unknown as Record<string, unknown>).duration_min,
+          notes: (selectedDay.session as unknown as Record<string, unknown>).notes,
+        } : null,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.feedback) setSessionFeedback(data.feedback);
+      })
+      .catch(() => {})
+      .finally(() => setFeedbackLoading(false));
+  }, [selectedDay?.dateStr, selectedDay?.workout.type]);
 
   async function markDone(dateStr: string, sessionType: string) {
     if (!userId) return;
@@ -171,7 +247,9 @@ export default function WeekPage() {
     setSessions(prev => prev.filter(s => !(s.date === dateStr && s.session_type === sessionType)));
   }
 
-  const doneSessions = sessions.filter(s => s.status === 'done').length;
+  const doneDates = new Set(sessions.filter(s => s.status === 'done').map(s => s.date));
+  const stravaDates = new Set(stravaActivities.map(a => a.activity_date));
+  const doneSessions = new Set([...Array.from(doneDates), ...Array.from(stravaDates)]).size;
 
   return (
     <div className="min-h-screen bg-gray-950" style={{ paddingBottom: '5.5rem' }}>
@@ -317,7 +395,7 @@ export default function WeekPage() {
               key={dayStr}
               onClick={() => {
                 if (!isActive || !runwayWorkoutInfo || !rwDetail) return;
-                setSelectedDay({ workout: runwayWorkoutInfo, detail: rwDetail, label: rwDateLabel });
+                setSelectedDay({ workout: runwayWorkoutInfo, detail: rwDetail, label: rwDateLabel, dateStr: dayStr, stravaActivities: getStravaForDate(dayStr), session: getSession(dayStr, runwayWorkoutInfo.type) });
               }}
               className={`rounded-xl p-4 flex items-center gap-3 transition-all ${
                 isActive ? 'cursor-pointer active:scale-[0.98]' : 'cursor-default'
@@ -385,6 +463,9 @@ export default function WeekPage() {
                 workout,
                 detail: getWorkoutDetail(day, planProfile),
                 label: `${DAY_NAMES[i]} ${day.getDate()} ${day.toLocaleString('default', { month: 'short' })}`,
+                dateStr: dayStr,
+                stravaActivities: getStravaForDate(dayStr),
+                session: getSession(dayStr, workout.type),
               })}
               className={`rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer active:scale-[0.98] ${
                 isToday ? 'bg-gray-800 ring-1 ring-white/20' : 'bg-gray-900'
@@ -436,15 +517,31 @@ export default function WeekPage() {
                       }
                     }}
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                      session?.status === 'done'
+                      session?.status === 'done' || getStravaForDate(dayStr).length > 0
                         ? 'bg-green-500/25 text-green-400'
                         : session?.status === 'missed'
                         ? 'bg-red-500/25 text-red-400'
                         : 'bg-gray-800 text-gray-600 border border-gray-700'
                     }`}
                   >
-                    {session?.status === 'done' ? '✓' : session?.status === 'missed' ? '✗' : '·'}
+                    {session?.status === 'done' || getStravaForDate(dayStr).length > 0
+                      ? '✓'
+                      : session?.status === 'missed'
+                      ? '✗'
+                      : '·'}
                   </button>
+                )}
+
+                {/* Orange Strava dot — shown when there are Strava activities */}
+                {getStravaForDate(dayStr).length > 0 && (
+                  <div className="flex items-center gap-0.5">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="#FC4C02">
+                      <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+                    </svg>
+                    {getStravaForDate(dayStr).length > 1 && (
+                      <span className="text-[9px] text-orange-500 font-medium">{getStravaForDate(dayStr).length}</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -473,7 +570,10 @@ export default function WeekPage() {
           workout={selectedDay.workout}
           detail={selectedDay.detail}
           dateLabel={selectedDay.label}
-          onClose={() => setSelectedDay(null)}
+          onClose={() => { setSelectedDay(null); setSessionFeedback(null); }}
+          sessionFeedback={sessionFeedback}
+          feedbackLoading={feedbackLoading}
+          stravaActivities={selectedDay.stravaActivities}
         />
       )}
 
