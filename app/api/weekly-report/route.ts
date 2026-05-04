@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch all week data in parallel
-    const [sessionsRes, overridesRes, stravaRes, checkinsRes, profileRes] = await Promise.all([
+    const [sessionsRes, overridesRes, stravaRes, checkinsRes, profileRes, historyRes] = await Promise.all([
       supabase
         .from('completed_sessions')
         .select('date, session_type, status, distance_km, duration_min')
@@ -93,9 +93,16 @@ export async function POST(req: NextRequest) {
         .lte('date', weekEnd),
       supabase
         .from('profiles')
-        .select('goal, training_level, target_race, race_date, days_per_week')
+        .select('goal, training_level, target_race, race_date, days_per_week, races')
         .eq('id', userId)
         .single(),
+      supabase
+        .from('weekly_reports')
+        .select('week_start, week_end, report_data')
+        .eq('user_id', userId)
+        .lt('week_start', weekStart)
+        .order('week_start', { ascending: false })
+        .limit(8),
     ]);
 
     const sessions  = sessionsRes.data ?? [];
@@ -103,6 +110,7 @@ export async function POST(req: NextRequest) {
     const strava    = stravaRes.data ?? [];
     const checkins  = checkinsRes.data ?? [];
     const profile   = profileRes.data;
+    const history   = historyRes.data ?? [];
 
     // Compute summary metrics for prompt context
     const doneDates   = new Set(sessions.filter(s => s.status === 'done').map(s => s.date));
@@ -126,6 +134,23 @@ export async function POST(req: NextRequest) {
       .filter((v): v is number => v != null);
     const avgInjuryPain = injuryPainValues.length > 0
       ? Math.round(injuryPainValues.reduce((a, b) => a + b, 0) / injuryPainValues.length * 10) / 10
+      : null;
+
+    const historySummary = history.map(h => ({
+      weekStart: h.week_start,
+      distanceKm: (h.report_data as Record<string, unknown>)?.total_distance_km ?? null,
+      sessionsCompleted: (h.report_data as Record<string, unknown>)?.sessions_completed ?? null,
+      sessionsPlanned: (h.report_data as Record<string, unknown>)?.sessions_planned ?? null,
+      effortRating: (h.report_data as Record<string, unknown>)?.effort_rating ?? null,
+    })).reverse(); // oldest first
+
+    const upcomingRaces = ((profile?.races as Array<{ name: string; date: string; distance: string }>) ?? [])
+      .filter(r => r.date >= weekEnd)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const nearestRace = upcomingRaces[0] ?? null;
+    const weeksToNearest = nearestRace
+      ? Math.round((new Date(nearestRace.date).getTime() - new Date(weekEnd).getTime()) / (7 * 24 * 60 * 60 * 1000))
       : null;
 
     // Build prompt
@@ -154,18 +179,42 @@ ${overrides.length > 0 ? `PLAN DEVIATIONS:
 ${overrides.map(o =>
   `- ${o.session_date}: planned ${o.planned_type ?? 'rest'} → actual ${o.actual_type}. Tags: ${(o.feedback_tags ?? []).join(', ') || 'none'}${o.feedback_notes ? `. Notes: "${o.feedback_notes}"` : ''}`
 ).join('\n')}
-` : ''}
-DAILY CHECK-INS:
+` : ''}DAILY CHECK-INS:
 ${checkins.length === 0 ? '- No check-ins recorded' : checkins.map(c =>
   `- ${c.date}: recovery=${c.whoop_recovery ?? 'N/A'}/100, injury pain=${c.achilles_pain ?? 'N/A'}/10${c.sleep_hours ? `, sleep ${c.sleep_hours}h` : ''}${c.notes ? `, notes: "${c.notes}"` : ''}`
 ).join('\n')}
 
-KEY METRICS:
-- Sessions completed: ${sessionsCompleted} / ${sessionsPlanned} (Strava auto-detected + manual)
-- Total distance all sports (Strava): ${totalDistanceKm}km
-- Unscheduled Strava activities: ${strava.filter(a => !sessions.some(s => s.date === a.activity_date)).length} (activities on days with no training plan session)
-- Avg recovery score: ${avgRecovery ?? 'N/A'}/100
+KEY METRICS (computed server-side — treat these as ground truth, do not recalculate):
+- Sessions completed: ${sessionsCompleted} / ${sessionsPlanned}
+- Total distance all sports: ${totalDistanceKm}km
+- Avg recovery: ${avgRecovery ?? 'N/A'}/100
 - Avg injury pain: ${avgInjuryPain ?? 'N/A'}/10
+
+${historySummary.length > 0 ? `
+TRAINING HISTORY (oldest → newest, up to 8 weeks):
+${historySummary.map(h =>
+  `- Week of ${h.weekStart}: ${h.distanceKm != null ? h.distanceKm + 'km' : 'no data'}, ${h.sessionsCompleted != null ? `${h.sessionsCompleted}/${h.sessionsPlanned} sessions` : ''}, effort: ${h.effortRating ?? 'unknown'}`
+).join('\n')}
+
+Average weekly distance (last ${historySummary.length} weeks): ${
+  historySummary.filter(h => h.distanceKm != null).length > 0
+    ? Math.round(historySummary.reduce((sum, h) => sum + (Number(h.distanceKm) || 0), 0) / historySummary.filter(h => h.distanceKm != null).length * 10) / 10
+    : 'insufficient data'
+}km
+` : '(No training history yet — this is one of the first weeks.)'}
+
+RACES:
+${upcomingRaces.length === 0
+  ? '- No races scheduled. Give feedback relative to stated goal and training trend.'
+  : upcomingRaces.map((r, i) => {
+      const weeks = Math.round((new Date(r.date).getTime() - new Date(weekEnd).getTime()) / (7 * 24 * 60 * 60 * 1000));
+      return `- ${r.name} (${r.distance}) — ${r.date} — ${weeks} weeks away${i === 0 ? ' ← NEAREST RACE (primary focus)' : ''}`;
+    }).join('\n')}
+
+${nearestRace
+  ? `Focus goal_progress commentary on the nearest race (${nearestRace.name}) as the immediate training priority. Mention the full race pipeline briefly so the athlete understands the progression.`
+  : `No race scheduled. Focus goal_progress on the stated goal (${profile?.goal ?? 'general fitness'}) and training trend over the past weeks.`
+}
 
 Write a thorough but concise weekly report. Be specific with numbers. Identify genuine highlights and concerns — don't manufacture either if data doesn't support them. Keep next_week_suggestion practical and actionable.`;
 
@@ -184,9 +233,6 @@ Write a thorough but concise weekly report. Be specific with numbers. Identify g
               properties: {
                 headline:             { type: 'string' },
                 summary:              { type: 'string' },
-                sessions_completed:   { type: 'integer' },
-                sessions_planned:     { type: 'integer' },
-                total_distance_km:    { type: 'number' },
                 highlights:           { type: 'array', items: { type: 'string' } },
                 concerns:             { type: 'array', items: { type: 'string' } },
                 recovery_summary:     { type: 'string' },
@@ -195,8 +241,7 @@ Write a thorough but concise weekly report. Be specific with numbers. Identify g
                 effort_rating:        { type: 'string', enum: ['excellent', 'good', 'fair', 'poor'] },
               },
               required: [
-                'headline', 'summary', 'sessions_completed', 'sessions_planned',
-                'total_distance_km', 'highlights', 'concerns', 'recovery_summary',
+                'headline', 'summary', 'highlights', 'concerns', 'recovery_summary',
                 'goal_progress', 'next_week_suggestion', 'effort_rating',
               ],
             },
@@ -222,6 +267,21 @@ Write a thorough but concise weekly report. Be specific with numbers. Identify g
       console.error('[weekly-report] JSON parse failed:', rawText);
       return NextResponse.json({ error: 'Failed to parse Gemini response' }, { status: 500 });
     }
+
+    reportData.total_distance_km = totalDistanceKm;
+    reportData.sessions_completed = sessionsCompleted;
+    reportData.sessions_planned = sessionsPlanned;
+
+    reportData.nearest_race_name = nearestRace?.name ?? null;
+    reportData.nearest_race_date = nearestRace?.date ?? null;
+    reportData.nearest_race_weeks = weeksToNearest;
+    reportData.upcoming_races = upcomingRaces.map(r => ({
+      name: r.name,
+      date: r.date,
+      distance: r.distance,
+      weeks_away: Math.round((new Date(r.date).getTime() - new Date(weekEnd).getTime()) / (7 * 24 * 60 * 60 * 1000)),
+    }));
+    reportData.history_summary = historySummary;
 
     // Save to weekly_reports via upsert
     const { error: upsertError } = await supabase
