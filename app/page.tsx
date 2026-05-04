@@ -376,21 +376,19 @@ export default function TodayPage() {
         }
       }
 
-      // Show weekly report card on Monday morning only (force fresh — bust any stale Sunday cache)
-      const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon
-      const hourOfDay = today.getHours();
-      const isReportTime = dayOfWeek === 1 && hourOfDay < 12;
-      if (isReportTime && user) {
-        // Always use last Monday (7 days ago from this Monday)
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - 7);
-        monday.setHours(0, 0, 0, 0);
-        const weekStart = monday.toISOString().split('T')[0];
+      // Always fetch the latest weekly report (cached — no Gemini call unless Monday + no report yet)
+      if (user) {
+        const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon
+        // Compute the most recently completed week's Monday
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7);
+        lastMonday.setHours(0, 0, 0, 0);
+        const weekStart = lastMonday.toISOString().split('T')[0];
 
         fetch('/api/weekly-report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id, weekStart, force: true }),
+          body: JSON.stringify({ userId: user.id, weekStart }),
         })
           .then(r => r.json())
           .then(data => {
@@ -596,6 +594,7 @@ export default function TodayPage() {
           <WeeklyReportCard
             report={weeklyReport.report}
             weekStart={weeklyReport.weekStart}
+            weekEnd={weeklyReport.weekEnd}
           />
         )}
 
