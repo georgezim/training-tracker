@@ -55,6 +55,8 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [userId, setUserId] = useState('');
   const [originalProfile, setOriginalProfile] = useState<UserProfile | null>(null);
+  const [stravaConnected, setStravaConnected] = useState<boolean | null>(null);
+  const [stravaDisconnecting, setStravaDisconnecting] = useState(false);
 
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('marathon');
@@ -95,11 +97,31 @@ export default function SettingsPage() {
     load();
   }, [router]);
 
+  useEffect(() => {
+    fetch('/api/strava/status')
+      .then(r => r.json())
+      .then(d => setStravaConnected(d.connected ?? false))
+      .catch(() => setStravaConnected(false));
+  }, []);
+
   function toggleEquipment(val: string) {
     setEquipment(prev => prev.includes(val) ? prev.filter(e => e !== val) : [...prev, val]);
   }
   function toggleActivity(val: string) {
     setPreferredActivities(prev => prev.includes(val) ? prev.filter(e => e !== val) : [...prev, val]);
+  }
+
+  async function handleStravaDisconnect() {
+    if (!confirm('Disconnect Strava? This will remove all your synced activity data from Dromos.')) return;
+    setStravaDisconnecting(true);
+    try {
+      await fetch('/api/strava/disconnect', { method: 'POST' });
+      setStravaConnected(false);
+    } catch {
+      alert('Failed to disconnect. Please try again.');
+    } finally {
+      setStravaDisconnecting(false);
+    }
   }
 
   async function handleSave() {
@@ -317,6 +339,50 @@ export default function SettingsPage() {
 
         {error && <p className="text-red-400 text-sm bg-red-950/50 border border-red-800/40 rounded-xl px-4 py-2">{error}</p>}
 
+        {/* ── Strava connection ── */}
+        <div>
+          <label className="text-gray-400 text-xs font-medium block mb-2">Strava</label>
+
+          {stravaConnected === true && (
+            <div className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#FC4C02">
+                  <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+                </svg>
+                <div>
+                  <p className="text-white text-sm font-medium">Strava connected</p>
+                  <p className="text-gray-500 text-xs">Activities sync automatically</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleStravaDisconnect}
+                disabled={stravaDisconnecting}
+                className="text-red-400 text-xs font-medium disabled:opacity-40"
+              >
+                {stravaDisconnecting ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            </div>
+          )}
+
+          {stravaConnected === false && (
+            <a
+              href="/api/strava/auth"
+              className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl font-semibold text-sm text-white"
+              style={{ backgroundColor: '#FC4C02' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+              </svg>
+              Connect with Strava
+            </a>
+          )}
+
+          {stravaConnected === null && (
+            <div className="h-12 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+          )}
+        </div>
+
         <button onClick={handleSave} disabled={saving}
           className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base disabled:opacity-60 active:scale-95 transition-transform">
           {saving ? 'Saving…' : saved ? '✓ Saved!' : 'Save Changes'}
@@ -332,6 +398,15 @@ export default function SettingsPage() {
       </main>
 
       <BottomNav active="today" />
+
+      {/* Powered by Strava — required attribution */}
+      <div className="flex items-center justify-center gap-1.5 py-4 pb-8">
+        <span className="text-gray-600 text-xs">Powered by</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02">
+          <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+        </svg>
+        <span className="text-[#FC4C02] text-xs font-semibold">Strava</span>
+      </div>
     </div>
   );
 }
