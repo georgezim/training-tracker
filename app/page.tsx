@@ -158,7 +158,6 @@ export default function TodayPage() {
   const [activityFeedback, setActivityFeedback] = useState<FeedbackInline | null>(null);
   const [weekSessions, setWeekSessions] = useState<CompletedSession[]>([]);
   const [weeklyReport, setWeeklyReport] = useState<{ report: WeeklyReport; weekStart: string; weekEnd: string } | null>(null);
-  const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(false);
 
   const planProfile: PlanProfile | null = profile ? buildPlanProfile(profile) : null;
   const workout = getWorkoutForDateWithProfile(today, planProfile);
@@ -593,11 +592,10 @@ export default function TodayPage() {
           </div>
         )}
 
-        {weeklyReport && !weeklyReportDismissed && (
+        {weeklyReport && (
           <WeeklyReportCard
             report={weeklyReport.report}
             weekStart={weeklyReport.weekStart}
-            onDismiss={() => setWeeklyReportDismissed(true)}
           />
         )}
 
