@@ -149,7 +149,7 @@ export default function TodayPage() {
   const [showMissedModal, setShowMissedModal] = useState(false);
   const [missedReason, setMissedReason] = useState('');
   const [showCheckinModal, setShowCheckinModal] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [planGenerating, setPlanGenerating] = useState(false);
@@ -543,7 +543,7 @@ export default function TodayPage() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between">
             <img src="/logo.png" alt="Dromos" className="w-9 h-9 rounded-xl object-cover" />
-            <button onClick={() => setShowProfile(true)} className="p-2 text-gray-400 hover:text-white transition-colors">
+            <button onClick={() => setShowMenu(true)} className="p-2 text-gray-400 hover:text-white transition-colors">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
@@ -1166,67 +1166,139 @@ export default function TodayPage() {
         </>
       )}
 
-      {/* Profile / Settings drawer */}
-      {showProfile && (
+      {/* ── App menu drawer ── */}
+      {showMenu && (
         <>
-          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setShowProfile(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl p-5 space-y-5"
-            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1.5rem)' }}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-white font-bold text-lg">Profile</h3>
-              <button onClick={() => setShowProfile(false)} className="text-gray-500 text-2xl leading-none">×</button>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setShowMenu(false)} />
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl overflow-hidden"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+          >
+            {/* Handle + header */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-700" />
+            </div>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Menu</span>
+              <button onClick={() => setShowMenu(false)} className="text-gray-500 text-2xl leading-none">×</button>
             </div>
 
-            {/* Avatar */}
-            <div className="flex flex-col items-center gap-3 py-2">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden">
-                  {avatarUploading
-                    ? <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                    : profile?.avatar_url
-                      ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                      : <span className="text-white text-3xl font-bold">{profile?.name?.charAt(0)?.toUpperCase() ?? '?'}</span>
-                  }
+            {/* Profile identity row — tap goes to settings */}
+            <a
+              href="/settings"
+              onClick={() => setShowMenu(false)}
+              className="flex items-center gap-3 px-5 py-4 border-b border-gray-800 active:bg-gray-800 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {profile?.avatar_url
+                  ? <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                  : <span className="text-white text-lg font-bold">{profile?.name?.charAt(0)?.toUpperCase() ?? '?'}</span>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold leading-tight">{profile?.name ?? '—'}</p>
+                <p className="text-gray-500 text-xs capitalize mt-0.5">{profile?.goal?.replace(/_/g, ' ') ?? ''}</p>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </a>
+
+            {/* Training section */}
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Training</p>
+            </div>
+
+            {[
+              {
+                href: '/checkin',
+                label: 'Check-in',
+                sub: 'Recovery · Whoop · Achilles',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                ),
+              },
+              {
+                href: '/history',
+                label: 'History',
+                sub: 'Past sessions and trends',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                ),
+              },
+              {
+                href: '/tests',
+                label: 'Tests',
+                sub: 'Fitness benchmarks',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 20h.01M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/>
+                  </svg>
+                ),
+              },
+            ].map(item => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setShowMenu(false)}
+                className="flex items-center gap-3 px-5 py-3 active:bg-gray-800 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center text-gray-400 flex-shrink-0">
+                  {item.icon}
                 </div>
-                <label className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-400">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} />
-                </label>
-              </div>
-              <div className="text-center">
-                <p className="text-white font-semibold">{profile?.name ?? '—'}</p>
-                <p className="text-gray-500 text-sm">{profile?.goal?.replace(/_/g, ' ') ?? ''}</p>
-              </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-gray-200 text-sm font-medium">{item.label}</p>
+                  <p className="text-gray-600 text-xs mt-0.5">{item.sub}</p>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </a>
+            ))}
+
+            {/* Account section */}
+            <div className="px-5 pt-3 pb-1 border-t border-gray-800 mt-1">
+              <p className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Account</p>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <p className="text-white font-bold text-lg">{profile?.days_per_week ?? '—'}</p>
-                <p className="text-gray-500 text-xs">days/week</p>
+            <a
+              href="/settings"
+              onClick={() => setShowMenu(false)}
+              className="flex items-center gap-3 px-5 py-3 active:bg-gray-800 transition-colors"
+            >
+              <div className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center text-gray-400 flex-shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
               </div>
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <p className="text-white font-bold text-lg capitalize">{profile?.training_level?.slice(0,3) ?? '—'}</p>
-                <p className="text-gray-500 text-xs">level</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-200 text-sm font-medium">Settings</p>
+                <p className="text-gray-600 text-xs mt-0.5">Profile · Strava · Plan</p>
               </div>
-              <div className="bg-gray-800 rounded-xl p-3 text-center">
-                <p className="text-white font-bold text-lg">{racePlanInfo ? `W${racePlanInfo.currentWeek}` : '—'}</p>
-                <p className="text-gray-500 text-xs">current week</p>
-              </div>
-            </div>
-
-            {/* Personal Details */}
-            <a href="/settings" onClick={() => setShowProfile(false)}
-              className="w-full py-3 rounded-xl bg-gray-800 text-gray-300 font-semibold text-sm text-center block">
-              ✏️ Personal Details
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
             </a>
 
             {/* Sign out */}
-            <form action="/api/auth/logout" method="POST">
-              <button type="submit" className="w-full py-3 rounded-xl bg-red-900/40 text-red-300 border border-red-700/30 font-bold text-sm active:scale-95 transition-transform">
-                Sign Out
-              </button>
-            </form>
+            <div className="px-5 pt-3">
+              <form action="/api/auth/logout" method="POST">
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-red-900/30 text-red-400 border border-red-800/30 font-semibold text-sm active:scale-95 transition-transform"
+                >
+                  Sign out
+                </button>
+              </form>
+            </div>
           </div>
         </>
       )}

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, DailyCheckin, UserProfile } from '@/lib/supabase';
 import { getWorkoutForDateWithProfile, parseLocalDate, COLOR_TEXT, PlanProfile } from '@/lib/training-plan';
-import BottomNav from '@/components/BottomNav';
 
 const FEELING_EMOJI: Record<string, string> = {
   great:   '🟢',
@@ -168,7 +167,6 @@ export default function HistoryPage() {
         })}
       </main>
 
-      <BottomNav active="history" />
     </div>
   );
 }

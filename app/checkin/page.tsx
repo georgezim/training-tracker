@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, DailyCheckin, FeelingType, UserProfile } from '@/lib/supabase';
 import { dateToString, getWorkoutForDateWithProfile, PlanProfile } from '@/lib/training-plan';
-import BottomNav from '@/components/BottomNav';
 
 const FEELING_OPTIONS: { value: FeelingType; label: string; emoji: string; cls: string }[] = [
   { value: 'great',   label: 'Great',   emoji: '🟢', cls: 'bg-green-700 text-white border-green-600' },
@@ -271,7 +270,6 @@ export default function CheckinPage() {
         </button>
       </form>
 
-      <BottomNav active="checkin" />
     </div>
   );
 }
