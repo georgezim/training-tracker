@@ -924,20 +924,17 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* ── Strava ── */}
+        {/* ── Connect with Strava (official button — required by Strava Brand Guidelines) ── */}
         {stravaConnected === false && (
           <a
             href="/api/strava/auth"
-            className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 hover:border-[#FC4C02]/40 transition-colors"
+            className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-2xl font-semibold text-base text-white active:opacity-90 transition-opacity"
+            style={{ backgroundColor: '#FC4C02' }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FC4C02">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
               <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
             </svg>
-            <div>
-              <p className="text-white text-sm font-semibold">Connect Strava</p>
-              <p className="text-gray-500 text-xs">Auto-import your runs and rides</p>
-            </div>
-            <span className="ml-auto text-gray-600 text-sm">→</span>
+            Connect with Strava
           </a>
         )}
 
