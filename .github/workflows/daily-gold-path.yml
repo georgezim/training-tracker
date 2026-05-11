@@ -90,11 +90,9 @@ jobs:
         id: email_content
         run: |
           echo "subject=$(cat email-subject.txt)" >> $GITHUB_OUTPUT
-          {
-            echo 'body<<EOF'
-            cat email-body.txt
-            echo EOF
-          } >> $GITHUB_OUTPUT
+          echo "body<<DROMOS_EMAIL_DELIM" >> $GITHUB_OUTPUT
+          cat email-body.txt >> $GITHUB_OUTPUT
+          echo "DROMOS_EMAIL_DELIM" >> $GITHUB_OUTPUT
 
       - name: Send email report
         uses: dawidd6/action-send-mail@v3
