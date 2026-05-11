@@ -70,19 +70,43 @@ jobs:
             }
 
             const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
-            const allTests = results.suites.flatMap(s => s.specs).flatMap(s => s.tests);
+
+            // Recursively collect all specs — tests inside test.describe() blocks
+            // live in nested suites, not at the top level of each file suite.
+            function collectSpecs(suites, fileTitle) {
+              return suites.flatMap(s => {
+                const title = fileTitle || s.title;
+                return [
+                  ...(s.specs || []).map(spec => ({ file: title, title: spec.title, tests: spec.tests || [] })),
+                  ...collectSpecs(s.suites || [], title),
+                ];
+              });
+            }
+
+            const allSpecs = collectSpecs(results.suites, '');
+            const allTests = allSpecs.flatMap(s => s.tests);
             const passed = allTests.filter(t => t.status === 'expected').length;
             const failed = allTests.filter(t => t.status !== 'expected').length;
             const total  = passed + failed;
 
-            const failedNames = results.suites
-              .flatMap(s => s.specs.map(spec => ({ title: spec.title, tests: spec.tests })))
-              .flatMap(({ title, tests }) => tests.filter(t => t.status !== 'expected').map(() => '  • ' + title))
-              .join('\n');
+            // Build a readable list of every test with its pass/fail status
+            const testLines = allSpecs.flatMap(({ title, tests }) =>
+              tests.map(t => {
+                const icon = t.status === 'expected' ? '✓' : '✗';
+                return `  ${icon} ${title}`;
+              })
+            ).join('\n');
+
+            const failedNames = allSpecs
+              .flatMap(({ title, tests }) =>
+                tests.filter(t => t.status !== 'expected').map(() => `  ✗ ${title}`)
+              ).join('\n');
 
             const emoji  = failed === 0 ? '✅' : '❌';
             const status = failed === 0 ? 'ALL PASSING' : `${failed} FAILING`;
-            const detail = failed > 0 ? `Failed tests:\n${failedNames}` : 'All critical flows are working perfectly.';
+            const detail = failed > 0
+              ? `Failed tests:\n${failedNames}\n\nAll tests:\n${testLines}`
+              : `All tests:\n${testLines}`;
 
             const body = [
               `${emoji} Dromos — Daily Gold Path Report`,
