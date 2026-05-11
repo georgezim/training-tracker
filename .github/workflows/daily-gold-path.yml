@@ -48,42 +48,60 @@ jobs:
         run: |
           node -e "
           const fs = require('fs');
-          const raw = fs.readFileSync('test-results.json', 'utf8');
-          const results = JSON.parse(raw);
-
-          const passed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status === 'expected').length;
-          const failed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status !== 'expected').length;
-          const total = passed + failed;
-          const emoji = failed === 0 ? '✅' : '❌';
-          const status = failed === 0 ? 'ALL PASSING' : \`\${failed} FAILING\`;
-
-          const failedNames = results.suites
-            .flatMap(s => s.specs)
-            .flatMap(s => s.tests.map(t => ({ title: s.title, status: t.status })))
-            .filter(t => t.status !== 'expected')
-            .map(t => '  • ' + t.title)
-            .join('\n');
-
           const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Athens' });
+          const runUrl = 'Run details: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}';
 
-          const body = [
-            \`\${emoji} Dromos — Daily Gold Path Report\`,
-            \`\${date}\`,
-            '',
-            \`Status: \${status}\`,
-            \`Passed: \${passed} / \${total}\`,
-            '',
-            failed > 0 ? 'Failed tests:\n' + failedNames : 'All critical flows are working perfectly.',
-            '',
-            'Run details: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}',
-          ].join('\n');
+          try {
+            if (!fs.existsSync('test-results.json')) throw new Error('test-results.json not found — Playwright may have failed to start');
 
-          fs.writeFileSync('email-body.txt', body);
-          console.log(body);
+            const raw = fs.readFileSync('test-results.json', 'utf8');
+            const results = JSON.parse(raw);
 
-          // Set subject for next step
-          const subjectStatus = failed === 0 ? 'All good ✅' : \`\${failed} test(s) failing ❌\`;
-          fs.writeFileSync('email-subject.txt', \`Dromos daily report — \${subjectStatus}\`);
+            const passed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status === 'expected').length;
+            const failed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status !== 'expected').length;
+            const total = passed + failed;
+            const emoji = failed === 0 ? '✅' : '❌';
+            const status = failed === 0 ? 'ALL PASSING' : \`\${failed} FAILING\`;
+
+            const failedNames = results.suites
+              .flatMap(s => s.specs)
+              .flatMap(s => s.tests.map(t => ({ title: s.title, status: t.status })))
+              .filter(t => t.status !== 'expected')
+              .map(t => '  • ' + t.title)
+              .join('\n');
+
+            const body = [
+              \`\${emoji} Dromos — Daily Gold Path Report\`,
+              date,
+              '',
+              \`Status: \${status}\`,
+              \`Passed: \${passed} / \${total}\`,
+              '',
+              failed > 0 ? 'Failed tests:\n' + failedNames : 'All critical flows are working perfectly.',
+              '',
+              runUrl,
+            ].join('\n');
+
+            fs.writeFileSync('email-body.txt', body);
+            console.log(body);
+
+            const subjectStatus = failed === 0 ? 'All good ✅' : \`\${failed} test(s) failing ❌\`;
+            fs.writeFileSync('email-subject.txt', \`Dromos daily report — \${subjectStatus}\`);
+          } catch (err) {
+            const body = [
+              '⚠️ Dromos — Daily Gold Path Report',
+              date,
+              '',
+              'Status: REPORT ERROR',
+              '',
+              'Could not parse test results: ' + err.message,
+              '',
+              runUrl,
+            ].join('\n');
+            fs.writeFileSync('email-body.txt', body);
+            fs.writeFileSync('email-subject.txt', 'Dromos daily report — report error ⚠️');
+            console.error('Report build failed:', err.message);
+          }
           "
 
       - name: Read email content
