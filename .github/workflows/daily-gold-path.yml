@@ -43,74 +43,75 @@ jobs:
             tests/e2e/smoke-gemini.spec.ts \
             --reporter=json 2>/dev/null || true
 
-      - name: Build email report
+      - name: Build email report and set outputs
         id: report
         run: |
-          node -e "
+          # Write the report builder to a temp file (avoids all shell-escaping issues)
+          cat > /tmp/build-report.js << 'ENDSCRIPT'
           const fs = require('fs');
-          const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Athens' });
-          const runUrl = 'Run details: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}';
+
+          const date = new Date().toLocaleDateString('en-GB', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            timeZone: 'Europe/Athens',
+          });
+          const repo    = process.env.GITHUB_REPOSITORY;
+          const runId   = process.env.GITHUB_RUN_ID;
+          const outFile = process.env.GITHUB_OUTPUT;
+          const runUrl  = `Run details: https://github.com/${repo}/actions/runs/${runId}`;
+
+          function writeOutputs(subject, body) {
+            fs.appendFileSync(outFile, `subject=${subject}\n`);
+            fs.appendFileSync(outFile, `body<<DROMOS_EMAIL_DELIM\n${body}\nDROMOS_EMAIL_DELIM\n`);
+          }
 
           try {
-            if (!fs.existsSync('test-results.json')) throw new Error('test-results.json not found — Playwright may have failed to start');
+            if (!fs.existsSync('test-results.json')) {
+              throw new Error('test-results.json not found — Playwright may have failed to start');
+            }
 
-            const raw = fs.readFileSync('test-results.json', 'utf8');
-            const results = JSON.parse(raw);
-
-            const passed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status === 'expected').length;
-            const failed = results.suites.flatMap(s => s.specs).flatMap(s => s.tests).filter(t => t.status !== 'expected').length;
-            const total = passed + failed;
-            const emoji = failed === 0 ? '✅' : '❌';
-            const status = failed === 0 ? 'ALL PASSING' : \`\${failed} FAILING\`;
+            const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
+            const allTests = results.suites.flatMap(s => s.specs).flatMap(s => s.tests);
+            const passed = allTests.filter(t => t.status === 'expected').length;
+            const failed = allTests.filter(t => t.status !== 'expected').length;
+            const total  = passed + failed;
 
             const failedNames = results.suites
-              .flatMap(s => s.specs)
-              .flatMap(s => s.tests.map(t => ({ title: s.title, status: t.status })))
-              .filter(t => t.status !== 'expected')
-              .map(t => '  • ' + t.title)
+              .flatMap(s => s.specs.map(spec => ({ title: spec.title, tests: spec.tests })))
+              .flatMap(({ title, tests }) => tests.filter(t => t.status !== 'expected').map(() => '  • ' + title))
               .join('\n');
 
+            const emoji  = failed === 0 ? '✅' : '❌';
+            const status = failed === 0 ? 'ALL PASSING' : `${failed} FAILING`;
+            const detail = failed > 0 ? `Failed tests:\n${failedNames}` : 'All critical flows are working perfectly.';
+
             const body = [
-              \`\${emoji} Dromos — Daily Gold Path Report\`,
-              date,
-              '',
-              \`Status: \${status}\`,
-              \`Passed: \${passed} / \${total}\`,
-              '',
-              failed > 0 ? 'Failed tests:\n' + failedNames : 'All critical flows are working perfectly.',
-              '',
+              `${emoji} Dromos — Daily Gold Path Report`,
+              date, '',
+              `Status: ${status}`,
+              `Passed: ${passed} / ${total}`, '',
+              detail, '',
               runUrl,
             ].join('\n');
 
-            fs.writeFileSync('email-body.txt', body);
-            console.log(body);
+            const subject = failed === 0
+              ? 'Dromos daily report — All good ✅'
+              : `Dromos daily report — ${failed} test(s) failing ❌`;
 
-            const subjectStatus = failed === 0 ? 'All good ✅' : \`\${failed} test(s) failing ❌\`;
-            fs.writeFileSync('email-subject.txt', \`Dromos daily report — \${subjectStatus}\`);
+            writeOutputs(subject, body);
+            console.log(body);
           } catch (err) {
             const body = [
               '⚠️ Dromos — Daily Gold Path Report',
-              date,
-              '',
-              'Status: REPORT ERROR',
-              '',
-              'Could not parse test results: ' + err.message,
-              '',
+              date, '',
+              'Status: REPORT ERROR', '',
+              `Could not parse test results: ${err.message}`, '',
               runUrl,
             ].join('\n');
-            fs.writeFileSync('email-body.txt', body);
-            fs.writeFileSync('email-subject.txt', 'Dromos daily report — report error ⚠️');
+            writeOutputs('Dromos daily report — report error ⚠️', body);
             console.error('Report build failed:', err.message);
           }
-          "
-
-      - name: Read email content
-        id: email_content
-        run: |
-          echo "subject=$(cat email-subject.txt)" >> $GITHUB_OUTPUT
-          echo "body<<DROMOS_EMAIL_DELIM" >> $GITHUB_OUTPUT
-          cat email-body.txt >> $GITHUB_OUTPUT
-          echo "DROMOS_EMAIL_DELIM" >> $GITHUB_OUTPUT
+          ENDSCRIPT
+          node /tmp/build-report.js
 
       - name: Send email report
         uses: dawidd6/action-send-mail@v3
@@ -120,10 +121,10 @@ jobs:
           secure: true
           username: ${{ secrets.GMAIL_SENDER_ADDRESS }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: ${{ steps.email_content.outputs.subject }}
+          subject: ${{ steps.report.outputs.subject }}
           to: george.zim83@gmail.com
           from: Dromos Tests <${{ secrets.GMAIL_SENDER_ADDRESS }}>
-          body: ${{ steps.email_content.outputs.body }}
+          body: ${{ steps.report.outputs.body }}
 
       - name: Upload full report as artifact
         if: always()
