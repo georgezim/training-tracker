@@ -72,7 +72,7 @@ export default function WeeklyReportCard({ report, weekStart, weekEnd: _weekEnd,
       <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-800">
         <div className="flex items-center gap-2">
           <span className="text-base">📅</span>
-          <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Week in review</span>
+          <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Previous week review</span>
         </div>
         <button
           onClick={() => {
@@ -92,7 +92,7 @@ export default function WeeklyReportCard({ report, weekStart, weekEnd: _weekEnd,
           {/* Effort badge + headline */}
           <div className="px-4 pt-3 pb-1">
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${effortBadgeClasses[report.effort_rating] ?? effortBadgeClasses.good}`}>
-              {effortLabel[report.effort_rating] ?? 'Week in review'}
+              {effortLabel[report.effort_rating] ?? 'Previous week review'}
             </span>
             <p className="text-white text-sm font-semibold mt-2 leading-snug">{report.headline}</p>
           </div>
