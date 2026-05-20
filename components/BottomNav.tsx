@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 
-type Tab = 'today' | 'week' | 'sessions';
+type Tab = 'today' | 'week' | 'sessions' | 'more';
 
 interface NavItem {
   id: Tab;
@@ -49,27 +50,129 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export default function BottomNav({ active }: { active: Tab }) {
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <div className="max-w-md mx-auto flex">
-        {NAV_ITEMS.map((item) => {
-          const isActive = item.id === active;
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
-                isActive ? 'text-blue-400' : 'text-gray-500'
-              }`}
-            >
-              {item.icon}
-              <span className={`text-xs font-medium ${isActive ? 'text-blue-400' : 'text-gray-500'}`}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-800"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="max-w-md mx-auto flex">
+
+          {/* ── Existing 3 tabs ── */}
+          {NAV_ITEMS.map((item) => {
+            const isActive = item.id === active;
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
+                  isActive ? 'text-blue-400' : 'text-gray-500'
+                }`}
+              >
+                {item.icon}
+                <span className={`text-xs font-medium ${isActive ? 'text-blue-400' : 'text-gray-500'}`}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* ── More button ── */}
+          <button
+            onClick={() => setShowMoreSheet(true)}
+            className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
+              active === 'more' ? 'text-blue-400' : 'text-gray-500'
+            }`}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>
+            </svg>
+            <span className={`text-xs font-medium ${active === 'more' ? 'text-blue-400' : 'text-gray-500'}`}>
+              More
+            </span>
+          </button>
+
+        </div>
+      </nav>
+
+      {/* ── More sheet ── */}
+      {showMoreSheet && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 z-40"
+            onClick={() => setShowMoreSheet(false)}
+          />
+
+          {/* Sheet */}
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl overflow-hidden"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 1rem)' }}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-700" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">More</span>
+              <button
+                onClick={() => setShowMoreSheet(false)}
+                className="text-gray-500 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Links */}
+            {[
+              {
+                href: '/history',
+                label: 'History',
+                sub: 'Past sessions and trends',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                ),
+              },
+              {
+                href: '/tests',
+                label: 'Tests',
+                sub: 'Fitness benchmarks',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 20h.01M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/>
+                  </svg>
+                ),
+              },
+            ].map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setShowMoreSheet(false)}
+                className="flex items-center gap-3 px-5 py-4 active:bg-gray-800 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gray-800 flex items-center justify-center text-gray-400 flex-shrink-0">
+                  {item.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-gray-200 text-sm font-semibold">{item.label}</p>
+                  <p className="text-gray-500 text-xs mt-0.5">{item.sub}</p>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
