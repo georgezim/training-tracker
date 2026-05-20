@@ -23,43 +23,61 @@ export interface StravaMatch {
   avg_pace?: string;
 }
 
+export interface ManualInput {
+  type: string;          // 'run' | 'bike' | 'gym' | 'swim' | 'other'
+  distance_km?: number;
+  duration_min?: number;
+}
+
 export function reconcile(
   planned: PlannedSession | null,
-  strava: StravaMatch | null
+  activity: StravaMatch | ManualInput | null
 ): ReconcileResult {
-  // No Strava activity found
-  if (!strava) return { status: 'no_activity' };
+  // No activity recorded
+  if (!activity) return { status: 'no_activity' };
 
-  // Activity on a rest day
+  // Activity on a rest day (or no plan)
   if (!planned || planned.type === 'rest') {
     return { status: 'rest_day_activity' };
   }
 
-  // Check type match
-  const typeMatches = checkTypeMatch(planned.type, strava.sport_type);
+  // Determine type and metrics from the activity (Strava vs manual)
+  const isStrava = 'strava_id' in activity;
+  const activitySportType = isStrava
+    ? (activity as StravaMatch).sport_type
+    : (activity as ManualInput).type;
+  const distanceKm = isStrava
+    ? (activity as StravaMatch).distance_km
+    : (activity as ManualInput).distance_km;
+  const durationMin = isStrava
+    ? (activity as StravaMatch).moving_time_min
+    : (activity as ManualInput).duration_min;
+
+  // Type match
+  const typeMatches = checkTypeMatch(planned.type, activitySportType);
   if (!typeMatches) {
     return { status: 'mismatch', reason: 'type' };
   }
 
-  // Check distance (if applicable — gym sessions don't have meaningful distance)
-  if (planned.distance_km && planned.type !== 'gym') {
-    const distanceRatio = strava.distance_km / planned.distance_km;
+  // Distance check (skip for gym sessions)
+  if (planned.distance_km && planned.type !== 'gym' && distanceKm != null) {
+    const distanceRatio = distanceKm / planned.distance_km;
     if (distanceRatio < 0.8 || distanceRatio > 1.2) {
       return { status: 'mismatch', reason: 'distance' };
     }
   }
 
-  // Check duration if no distance target
-  if (planned.duration_min && !planned.distance_km) {
-    const durationRatio = strava.moving_time_min / planned.duration_min;
+  // Duration check (only when no distance target)
+  if (planned.duration_min && !planned.distance_km && durationMin != null) {
+    const durationRatio = durationMin / planned.duration_min;
     if (durationRatio < 0.7 || durationRatio > 1.3) {
       return { status: 'mismatch', reason: 'duration' };
     }
   }
 
-  // Exact match if distance within 5%, close if within 20%
-  if (planned.distance_km) {
-    const ratio = strava.distance_km / planned.distance_km;
+  // Confidence
+  if (planned.distance_km && distanceKm != null) {
+    const ratio = distanceKm / planned.distance_km;
     return {
       status: 'match',
       confidence: (ratio >= 0.95 && ratio <= 1.05) ? 'exact' : 'close',
