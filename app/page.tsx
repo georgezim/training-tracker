@@ -25,7 +25,8 @@ import { useStravaActivity } from '@/lib/useStravaActivity';
 import AvatarCropModal from '@/components/AvatarCropModal';
 import MismatchFeedbackSheet from '@/components/MismatchFeedbackSheet';
 import ManualActivitySheet, { ManualActivityData } from '@/components/ManualActivitySheet';
-import { PlannedSession, StravaMatch } from '@/lib/reconcile';
+import { PlannedSession, StravaMatch, ManualInput, reconcile } from '@/lib/reconcile';
+import DeviationCard from '@/components/DeviationCard';
 import WeeklyReportCard from '@/components/WeeklyReportCard';
 
 const FEELING_EMOJI: Record<string, string> = {
@@ -157,6 +158,7 @@ export default function TodayPage() {
   const [showMismatchSheet, setShowMismatchSheet] = useState(false);
   const [showManualSheet, setShowManualSheet] = useState<false | 'mark_done' | 'edit' | 'rest_day_log'>(false);
   const [activityFeedback, setActivityFeedback] = useState<FeedbackInline | null>(null);
+  const [lastManualEntry, setLastManualEntry] = useState<ManualActivityData | null>(null);
   const [weekSessions, setWeekSessions] = useState<CompletedSession[]>([]);
   const [weeklyReport, setWeeklyReport] = useState<{ report: WeeklyReport; weekStart: string; weekEnd: string } | null>(null);
 
@@ -218,6 +220,23 @@ export default function TodayPage() {
   } : null;
 
   const { activities, activity: stravaActivity, connected: stravaConnected, loading: stravaLoading, reconcileResult } = useStravaActivity(todayStr, plannedSession);
+
+  // Manual activity reconcile (used when no Strava activity is present)
+  const manualReconcileResult = (() => {
+    if (!lastManualEntry) return null;
+    const manualInput: ManualInput = {
+      type: lastManualEntry.type,
+      distance_km: lastManualEntry.distance_km,
+      duration_min: lastManualEntry.duration_min,
+    };
+    return reconcile(plannedSession, manualInput);
+  })();
+
+  // Prefer Strava result when available; fall back to manual
+  const effectiveReconcileResult = activities.length > 0 ? reconcileResult : manualReconcileResult;
+  const showDeviationCard =
+    effectiveReconcileResult?.status === 'rest_day_activity' ||
+    effectiveReconcileResult?.status === 'mismatch';
 
   // Strava OAuth result — show a temporary toast for ?strava=connected, error banner for failures
   const [stravaToast, setStravaToast] = useState(false);
@@ -522,6 +541,64 @@ export default function TodayPage() {
   }, [reconcileResult?.status]);
 
   const bgClass = COLOR_BG[workout.color] ?? 'bg-gray-700';
+
+  // ── Deviation card helpers ──
+  function workoutTypeEmoji(type: string): string {
+    if (type === 'run') return '🏃';
+    if (type === 'bike') return '🚴';
+    if (type === 'gym') return '💪';
+    if (type === 'swim') return '🏊';
+    return '⚡';
+  }
+
+  const deviationSource: 'strava' | 'manual' =
+    activities.length > 0 ? 'strava' : 'manual';
+
+  const deviationActivity = activities[0] ?? null;
+
+  const plannedPillLabel = workout.type === 'rest'
+    ? '🌙 Rest'
+    : `${workoutTypeEmoji(workout.type)} ${workout.label}`;
+
+  const actualPillLabel = (() => {
+    if (deviationActivity) {
+      const emoji = workoutTypeEmoji(deviationActivity.sport_type);
+      const km = (deviationActivity.distance_m / 1000).toFixed(1);
+      return `${emoji} ${km}km`;
+    }
+    if (lastManualEntry) {
+      const emoji = workoutTypeEmoji(lastManualEntry.type);
+      const parts = [lastManualEntry.type.charAt(0).toUpperCase() + lastManualEntry.type.slice(1)];
+      if (lastManualEntry.distance_km) parts.push(`${lastManualEntry.distance_km}km`);
+      return `${emoji} ${parts.join(' ')}`;
+    }
+    return '⚡ Activity';
+  })();
+
+  const deviationActivityName = deviationActivity
+    ? (deviationActivity.name ?? deviationActivity.sport_type)
+    : lastManualEntry
+    ? `Manual ${lastManualEntry.type.charAt(0).toUpperCase() + lastManualEntry.type.slice(1)}`
+    : 'Activity';
+
+  const deviationTimeLabel = (() => {
+    if (!deviationActivity) return undefined;
+    const dateStr: string | undefined = (deviationActivity as unknown as Record<string, unknown>).start_date as string | undefined;
+    if (!dateStr) return undefined;
+    try {
+      return new Date(dateStr).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    } catch { return undefined; }
+  })();
+
+  const deviationDistanceKm = deviationActivity
+    ? deviationActivity.distance_m / 1000
+    : lastManualEntry?.distance_km;
+  const deviationDurationMin = deviationActivity
+    ? deviationActivity.moving_time_s / 60
+    : lastManualEntry?.duration_min;
+  const deviationAvgHr = deviationActivity?.avg_heartrate ?? undefined;
+  const deviationPerceivedEffort = !deviationActivity ? lastManualEntry?.perceived_effort : undefined;
+
   const dateLabel = today.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -758,29 +835,27 @@ export default function TodayPage() {
           </p>
         )}
 
-        {/* ── Rest day activity banner — shown when user trained on a rest day ── */}
-        {!inRunway && profile?.custom_plan && workout.type === 'rest' && reconcileResult?.status === 'rest_day_activity' && activities.length > 0 && (
-          <div className="rounded-2xl overflow-hidden border border-blue-800/50 mb-1">
-            {/* Summary header */}
-            <div className="bg-blue-950 px-4 py-3 flex items-start gap-3">
-              <span className="text-xl leading-none mt-0.5">💪</span>
-              <div>
-                <p className="text-white font-bold text-base leading-tight">You trained on a rest day</p>
-                <p className="text-blue-300/70 text-sm mt-0.5">
-                  {activities.length} {activities.length === 1 ? 'activity' : 'activities'} logged via Strava
-                </p>
-              </div>
-            </div>
-            {/* Originally scheduled */}
-            <div className="bg-blue-950/40 border-t border-blue-800/40 px-4 py-2.5">
-              <p className="text-blue-300/50 text-xs mb-0.5">Originally scheduled</p>
-              <p className="text-white/80 text-sm font-medium">Rest — recovery day</p>
-            </div>
-          </div>
+        {/* ── Deviation Card ── replaces workout card for rest_day_activity and mismatch ── */}
+        {!inRunway && profile?.custom_plan && showDeviationCard && (
+          <DeviationCard
+            variant={effectiveReconcileResult?.status === 'rest_day_activity' ? 'rest_day' : 'mismatch'}
+            activityName={deviationActivityName}
+            source={deviationSource}
+            stravaId={deviationActivity?.strava_id}
+            activityTimeLabel={deviationTimeLabel}
+            distanceKm={deviationDistanceKm}
+            durationMin={deviationDurationMin}
+            avgHr={deviationAvgHr}
+            perceivedEffort={deviationPerceivedEffort}
+            plannedLabel={plannedPillLabel}
+            actualLabel={actualPillLabel}
+            feedback={activityFeedback}
+            feedbackLoading={!activityFeedback && (activities.length > 0 || lastManualEntry !== null)}
+          />
         )}
 
         {/* ── Workout Card ── only shown once plan is ready AND not in runway */}
-        {!inRunway && profile?.custom_plan && <div
+        {!inRunway && profile?.custom_plan && !showDeviationCard && <div
           className={`rounded-2xl p-5 ${bgClass} relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform`}
           onClick={() => setShowDetail(true)}
         >
@@ -936,24 +1011,11 @@ export default function TodayPage() {
           </a>
         )}
 
-        {stravaActivity && reconcileResult?.status === 'mismatch' && (
-          <div className="bg-yellow-950/40 border border-yellow-700/40 rounded-2xl p-4">
-            <p className="text-yellow-300 text-sm font-semibold mb-1">⚠️ Session mismatch</p>
-            <p className="text-yellow-200/70 text-xs mb-3">Your Strava activity doesn't match today's plan. Tell us what happened.</p>
-            <button
-              onClick={() => setShowMismatchSheet(true)}
-              className="text-yellow-300 text-sm font-medium underline"
-            >
-              Review →
-            </button>
-          </div>
-        )}
-
         {/* ── Activities (training day match, or rest day activities) ── */}
-        {activities.length > 0 && reconcileResult?.status !== 'mismatch' && (
+        {activities.length > 0 && reconcileResult?.status === 'match' && (
           <div>
             {/* Section label — shown for multi-activity or rest day cases */}
-            {(activities.length > 1 || reconcileResult?.status === 'rest_day_activity') && (
+            {activities.length > 1 && (
               <p className="text-gray-500 text-xs font-semibold uppercase tracking-widest mb-2 px-1">
                 Activities ({activities.length})
               </p>
@@ -1069,6 +1131,7 @@ export default function TodayPage() {
           mode={showManualSheet}
           planned={plannedSession ?? undefined}
           onSubmit={async (data: ManualActivityData) => {
+            setLastManualEntry(data);
             setShowManualSheet(false);
             await requestActivityFeedback({
               type: data.type,
