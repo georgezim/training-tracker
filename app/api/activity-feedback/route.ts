@@ -37,17 +37,58 @@ interface FeedbackRequest {
   };
 }
 
+/** Returns "YYYY-MM-DD" for the Monday of the week containing `dateStr`. */
+function getWeekStart(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0=Sun, 1=Mon … 6=Sat
+  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body: FeedbackRequest = await req.json();
 
+  // ── Fetch weekly context ──
+  const weekStart = getWeekStart(body.sessionDate);
+
+  const [{ data: weekSessions }, { data: weekActivities }] = await Promise.all([
+    supabase
+      .from('completed_sessions')
+      .select('status, session_type')
+      .eq('user_id', userId)
+      .gte('date', weekStart)
+      .lt('date', body.sessionDate),
+    supabase
+      .from('strava_activities')
+      .select('distance_m')
+      .eq('user_id', userId)
+      .gte('start_date', weekStart + 'T00:00:00')
+      .lt('start_date', body.sessionDate + 'T00:00:00'),
+  ]);
+
+  const weeklyDistanceKm = (weekActivities ?? []).reduce(
+    (sum, a) => sum + (a.distance_m ?? 0) / 1000,
+    0
+  );
+  const sessionsCompleted = (weekSessions ?? []).filter(s => s.status === 'done').length;
+  const sessionsMissed    = (weekSessions ?? []).filter(s => s.status === 'missed').length;
+
+  const weekContext = {
+    weekStart,
+    weeklyDistanceKm,
+    sessionsCompleted,
+    sessionsMissed,
+  };
+
   // Fetch user profile
   const { data: profile } = await supabase
     .from('profiles').select('*').eq('id', userId).maybeSingle();
 
-  const prompt = buildGeminiPrompt(body, profile);
+  const prompt = buildGeminiPrompt(body, profile, weekContext);
 
   // Call Gemini
   const geminiRes = await fetch(
@@ -125,8 +166,18 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(feedback);
 }
 
-function buildGeminiPrompt(body: FeedbackRequest, profile: any): string {
+function buildGeminiPrompt(
+  body: FeedbackRequest,
+  profile: any,
+  weekContext: {
+    weekStart: string;
+    weeklyDistanceKm: number;
+    sessionsCompleted: number;
+    sessionsMissed: number;
+  }
+): string {
   const { planned, actual, context, mismatchFeedback } = body;
+  const { weeklyDistanceKm, sessionsCompleted, sessionsMissed } = weekContext;
 
   let prompt = `You are a running coach analyzing a completed training session.
 
@@ -135,10 +186,13 @@ ATHLETE:
 - Level: ${profile?.training_level ?? 'intermediate'}
 - Known injury: ${profile?.injury_notes ?? 'none'}
 
-SESSION DATE CONTEXT:
-- Day ${context.weekDay} of 7
-- Weekly load so far: ${context.weeklyLoadKm.toFixed(1)}km
-- Upcoming this week: ${context.upcomingSessions.join(', ') || 'none'}`;
+WEEK CONTEXT (Mon ${weekContext.weekStart} → today):
+- Total distance run so far this week: ${weeklyDistanceKm.toFixed(1)}km
+- Sessions completed: ${sessionsCompleted}
+- Sessions missed: ${sessionsMissed}
+- Day of week: ${context.weekDay} of 7
+
+IMPORTANT: Use the week context when assessing effort. If the athlete has done zero or very little training this week, a session on a rest day may be appropriate or even beneficial — do not rate it as "too_hard" just because it is a rest day. If they have done high volume already, flag recovery risk.`;
 
   if (context.isRestDay) {
     prompt += `\n\nThis was a REST DAY but the athlete trained anyway.`;
